@@ -1,18 +1,22 @@
 package cn.woyioii.model;
 
 import lombok.Data;
-import lombok.NoArgsConstructor;
-import lombok.AllArgsConstructor;
 
 @Data
 public class Road {
     private Integer id;
-    private String name;
-
     private Integer startId;
-    private Integer endId;
-
+    private Integer endId; 
+    private String name;
     private double length;
+    
+    public Road() {}
+    
+    public Road(Integer startId, Integer endId, String name) {
+        this.startId = startId;
+        this.endId = endId;
+        this.name = name;
+    }
     
     public Road(Integer startId, Integer endId, String name, double length) {
         this.startId = startId;

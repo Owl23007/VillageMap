@@ -9,19 +9,25 @@ import java.util.stream.Collectors;
 
 public class MapCalculator {
     
-    private MapCalculator() {}
-    
+    private MapCalculator() {
+        // 工具类私有构造函数
+    }
+
+    // 计算两个村庄之间的距离
     public static double calculateDistance(Village village1, Village village2) {
         int x1 = village1.getLocateX();
         int y1 = village1.getLocateY();
         int x2 = village2.getLocateX();
         int y2 = village2.getLocateY();
         
-        return Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
+        return calculateDistance( x1,  y1,  x2,  y2);
     }
-    
+
+    // 计算两个坐标之间的距离
     public static double calculateDistance(int x1, int y1, int x2, int y2) {
-        return Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
+        // 除以十并保留一位小数
+        double distance = Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
+        return Math.round(distance / 10.0 * 10.0) / 10.0;
     }
     
     public static Village findNearestVillage(Collection<Village> villages, int x, int y) {

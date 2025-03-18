@@ -55,6 +55,7 @@ public class MapRenderer {
     // 基本颜色配置
     private final Color villageColor = Color.BLUE;
     private final Color selectedVillageColor = Color.RED;
+    private final Color selectedVillageGlowColor = Color.rgb(255, 100, 100, 0.3);
     private final Color roadColor = Color.GRAY;
     private final Color pathColor = Color.GREEN;
 
@@ -101,55 +102,99 @@ public class MapRenderer {
 
     // 绘制网格
     public void drawGrid() {
-        GraphicsContext gc = canvas.getGraphicsContext2D();
-        gc.clearRect(0, 0, canvas.getWidth(), canvas.getHeight());
-
-        // 填充背景
-        gc.setFill(Color.WHITE);
-        gc.fillRect(0, 0, canvas.getWidth(), canvas.getHeight());
+        double width = canvas.getWidth();
+        double height = canvas.getHeight();
 
         // 设置网格样式
         gc.setStroke(Color.LIGHTGRAY);
         gc.setLineWidth(0.5);
 
-        double scale = 10.0; // 1格=1km，总共100km，所以缩放比例为10
-
         // 绘制垂直线（每10像素一条，代表1km）
-        for (int i = 0; i <= 1000; i += 10) {
-            gc.strokeLine(i, 0, i, 1000);
+        for (int i = 0; i <= width; i += 10) {
+            if (i % 100 == 0) {
+                gc.setLineWidth(1.0);
+                gc.setStroke(Color.GRAY);
+            } else {
+                gc.setLineWidth(0.5);
+                gc.setStroke(Color.LIGHTGRAY);
+            }
+            gc.strokeLine(i, 0, i, height);
         }
 
         // 绘制水平线
-        for (int i = 0; i <= 1000; i += 10) {
-            gc.strokeLine(0, i, 1000, i);
+        for (int i = 0; i <= height; i += 10) {
+            if (i % 100 == 0) {
+                gc.setLineWidth(1.0);
+                gc.setStroke(Color.GRAY);
+            } else {
+                gc.setLineWidth(0.5);
+                gc.setStroke(Color.LIGHTGRAY);
+            }
+            gc.strokeLine(0, i, width, i);
         }
 
-        // 标记主要网格线（每100像素，代表10km）
+        // 标记主要网格线刻度（每100像素，代表10km）
         gc.setFill(Color.GRAY);
-        for (int i = 0; i <= 1000; i += 100) {
-            gc.fillText(String.valueOf(i/10), i+5, 20);
-            gc.fillText(String.valueOf(i/10), 5, i+20);
+        gc.setFont(javafx.scene.text.Font.font(10));
+        for (int i = 0; i <= width; i += 100) {
+            gc.fillText(String.valueOf(i/10), i+2, 12);
+        }
+        for (int i = 0; i <= height; i += 100) {
+            gc.fillText(String.valueOf(i/10), 2, i+12);
         }
     }
+
     // 绘制村庄
     private void drawVillage(Village village) {
         double x = village.getLocateX();
         double y = village.getLocateY();
-        double radius = 10;
+        double radius = 5; // 默认半径
 
-        // 绘制村庄圆形
+        if (village.equals(selectedVillage)) {
+            // 选中村庄特效
+            radius = 8;  // 放大效果
+            
+            // 绘制外发光效果
+            gc.setFill(Color.rgb(255, 100, 100, 0.2));
+            gc.fillOval(x - radius - 8, y - radius - 8, (radius + 8) * 2, (radius + 8) * 2);
+            
+            // 绘制中间光晕
+            gc.setFill(Color.rgb(255, 50, 50, 0.3));
+            gc.fillOval(x - radius - 4, y - radius - 4, (radius + 4) * 2, (radius + 4) * 2);
+            
+            // 绘制村庄主体
+            gc.setFill(Color.RED);
+        } else {
+            // 非选中状态使用默认样式
+            gc.setFill(villageColor);
+        }
+
+        // 绘制村庄主体
         gc.fillOval(x - radius, y - radius, radius * 2, radius * 2);
 
-        // 给选中的村庄添加一个额外的边框
+        // 绘制边框
         if (village.equals(selectedVillage)) {
-            gc.setStroke(Color.BLACK);
+            // 选中状态边框效果
+            gc.setStroke(Color.rgb(200, 0, 0));
             gc.setLineWidth(2);
-            gc.strokeOval(x - radius - 2, y - radius - 2, (radius + 2) * 2, (radius + 2) * 2);
+            gc.strokeOval(x - radius, y - radius, radius * 2, radius * 2);
+            
+            // 外圈动态效果
+            gc.setStroke(Color.rgb(255, 0, 0, 0.4));
+            gc.setLineWidth(1);
+            gc.strokeOval(x - radius - 6, y - radius - 6, (radius + 6) * 2, (radius + 6) * 2);
         }
 
         // 绘制村庄名称
-        gc.setFill(Color.BLACK);
-        gc.fillText(village.getName(), x + radius + 2, y);
+        if (village.equals(selectedVillage)) {
+            gc.setFill(Color.RED);
+            gc.setFont(javafx.scene.text.Font.font(14)); // 选中时字体放大
+            gc.fillText(village.getName(), x + radius + 5, y + 5);
+        } else {
+            gc.setFill(Color.BLACK);
+            gc.setFont(javafx.scene.text.Font.font(12));
+            gc.fillText(village.getName(), x + radius + 3, y + 3);
+        }
     }
 
     // 绘制道路
@@ -186,8 +231,43 @@ public class MapRenderer {
 
     // 重绘整张地图（包括高亮和选择）
     public void redraw(List<Village> villages, List<Road> roads, VillageService villageService) {
+        // 保存数据以供后续重绘使用
+        this.lastVillages = new ArrayList<>(villages);
+        this.lastRoads = new ArrayList<>(roads);
+        this.lastVillageService = villageService;
+        
+        // 执行实际的重绘操作
         clear();
+        drawGrid();  // 先绘制网格
         drawRoads(roads, villageService);
         drawVillages(villages);
+    }
+
+    public void highlightVillage(Village village) {
+        // 更新选中的村庄
+        this.selectedVillage = village;
+        // 立即重绘地图以显示选中效果
+        redraw(List.copyOf(getLastVillages()), List.copyOf(getLastRoads()), getLastVillageService());
+    }
+    
+    // 添加字段用于保存最后一次绘制的数据
+    private List<Village> lastVillages = new ArrayList<>();
+    private List<Road> lastRoads = new ArrayList<>();
+    private VillageService lastVillageService;
+    
+    // 添加获取方法
+    private List<Village> getLastVillages() {
+        return lastVillages;
+    }
+    
+    private List<Road> getLastRoads() {
+        return lastRoads;
+    }
+    
+    private VillageService getLastVillageService() {
+        return lastVillageService;
+    }
+
+    public void highlightRoad(Road road, Village start, Village end) {
     }
 }

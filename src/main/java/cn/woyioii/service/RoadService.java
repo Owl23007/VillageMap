@@ -117,5 +117,22 @@ public interface RoadService {
      * @return 道路DAO实例
      */
     RoadDao getRoadDao();
+    
+    /**
+     * 检查是否有未保存的更改
+     * @return 如果有未保存的更改返回true，否则返回false
+     */
+    boolean hasChanges();
+    
+    /**
+     * 创建新的空白道路数据，清除当前内存中数据
+     */
+    void createNewRoads();
+    
+    /**
+     * 验证道路数据中的村庄引用是否有效，移除无效引用
+     * @param villageService 用于验证村庄ID的服务
+     */
+    void validateRoadReferences(VillageService villageService);
 }
 

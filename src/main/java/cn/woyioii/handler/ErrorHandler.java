@@ -31,7 +31,7 @@ public class ErrorHandler {
         Throwable rootCause = getRootCause(throwable);
         
         // 日志记录
-        log.error(context + ": ", throwable);
+        log.error("{}: ", context, throwable);
         log.error("根本原因: {}: {}", rootCause.getClass().getName(), rootCause.getMessage());
         
         // UI线程中显示错误

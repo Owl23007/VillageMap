@@ -4,6 +4,7 @@ import cn.woyioii.dao.RoadDao;
 import cn.woyioii.model.Road;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.FileReader;
 import java.io.FileWriter;
@@ -13,7 +14,9 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
+@Slf4j
 public class RoadDaoImpl implements RoadDao {
     private String filePath;
     private final Gson gson = new Gson();
@@ -67,17 +70,25 @@ public class RoadDaoImpl implements RoadDao {
         }
     }
 
-
     @Override
     public List<Road> getAllRoads() {
         try (FileReader reader = new FileReader(filePath)) {
-            return gson.fromJson(reader, new TypeToken<List<Road>>() {
-            }.getType());
+            List<Road> roads = gson.fromJson(reader, new TypeToken<List<Road>>() {}.getType());
+            
+            // 验证和过滤无效数据
+            if (roads == null) {
+                return new ArrayList<>();
+            }
+            
+            return roads.stream()
+                .filter(road -> road != null && road.getStartId() != null && road.getEndId() != null)
+                .collect(Collectors.toList());
+                
         } catch (IOException e) {
-            throw new RuntimeException("读取道路数据失败: " + e.getMessage(), e);
+            log.error("读取道路数据失败", e);
+            return new ArrayList<>();
         }
     }
-
 
     private void saveAllRoads(List<Road> roads) {
         try (FileWriter writer = new FileWriter(filePath)) {

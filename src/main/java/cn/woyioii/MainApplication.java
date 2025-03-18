@@ -13,6 +13,7 @@ import cn.woyioii.service.impl.VillageServiceImpl;
 import cn.woyioii.handler.ErrorHandler;
 import cn.woyioii.util.ImageUtils;
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
@@ -37,7 +38,7 @@ public class MainApplication extends Application {
             launch(args);
         } catch (Exception e) {
             System.err.println("程序启动失败: " + e.getMessage());
-            e.printStackTrace();
+            log.error(e.getMessage(), e);
         }
     }
 
@@ -47,12 +48,11 @@ public class MainApplication extends Application {
             super.init();
             // 初始化数据访问层（DAO）
             VillageDao villageDao = new VillageDaoImpl();
-            RoadDao roadDao = new RoadDaoImpl("data/roads.json");
+            RoadDao roadDao = new RoadDaoImpl();
 
             // 初始化服务层（Service）
             villageService = new VillageServiceImpl(villageDao);
             roadService = new RoadServiceImpl(roadDao, villageService);
-            log.info("服务层初始化成功");
         } catch (Exception e) {
             log.error("初始化失败", e);
             throw e;
@@ -61,60 +61,39 @@ public class MainApplication extends Application {
 
     // 启动 JavaFX 界面
     @Override
-    public void start(Stage primaryStage) {
-        // 设置全局异常处理
-        ErrorHandler.setupGlobalExceptionHandler();
-        
-        log.info("启动主界面");
+    public void start(Stage primaryStage) throws IOException {
         try {
-            // 加载主界面 FXML 文件
+            // 加载FXML
             FXMLLoader loader = new FXMLLoader(getClass().getResource("/view/main.fxml"));
-            log.info("加载主界面");
-            
             Parent root = loader.load();
-            log.info("FXML加载成功");
 
-            // 获取控制器并注入依赖
+            // 配置Controller，使用init()中已初始化的服务实例
             MainController controller = loader.getController();
-            if (controller == null) {
-                throw new RuntimeException("无法获取MainController实例");
-            }
-            
-            controller.setVillageService(villageService);
-            controller.setRoadService(roadService);
-            log.info("依赖注入完成");
+            controller.setServices(villageService, roadService);
+            controller.setStage(primaryStage);
             
             // 初始化数据
             controller.initializeData();
-            log.info("数据初始化完成");
 
-            // 配置主窗口
-            primaryStage.setTitle("公路村村通系统");
+            // 设置主场景
+            Scene scene = new Scene(root);
+            primaryStage.setScene(scene);
+            primaryStage.setTitle("村庄地图管理系统");
             
-            // 使用新的ImageUtils工具类加载图标
-            Image appIcon = ImageUtils.loadImage("/images/app_icon.png");
-            if (appIcon != null) {
-                primaryStage.getIcons().add(appIcon);
+            // 添加图标加载错误处理
+            Image icon = ImageUtils.loadImage("/images/app_icon.png");
+            if (icon != null) {
+                primaryStage.getIcons().add(icon);
             } else {
-                log.warn("无法加载应用程序图标");
+                log.warn("未能加载应用程序图标");
             }
             
-            Scene scene = new Scene(root, 1200, 800);
-            primaryStage.setScene(scene);
-            primaryStage.setMaximized(true); // 默认最大化窗口
             primaryStage.show();
-            log.info("主界面加载完成");
-
-        } catch (IOException e) {
-            log.error("FXML加载失败", e);
-            AlertUtils.showError("FXML加载失败",
-                    "错误详情: " + e.getMessage() + "\n" +
-                    "原因: " + (e.getCause() != null ? e.getCause().getMessage() : "未知"));
-            System.exit(1);
+            
         } catch (Exception e) {
-            log.error("启动失败", e);
-            ErrorHandler.handleException("界面初始化失败", e);
-            System.exit(1);
+            log.error("启动应用程序失败", e);
+            AlertUtils.showException("启动失败", "无法启动应用程序", e);
+            Platform.exit();
         }
     }
 

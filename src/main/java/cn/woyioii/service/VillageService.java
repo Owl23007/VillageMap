@@ -94,4 +94,15 @@ public interface VillageService {
      * @return 村庄DAO实例
      */
     VillageDao getVillageDao();
+    
+    /**
+     * 检查是否有未保存的更改
+     * @return 如果有未保存的更改返回true，否则返回false
+     */
+    boolean hasChanges();
+    
+    /**
+     * 创建新的空白村庄数据，清除当前内存中数据
+     */
+    void createNewVillages();
 }

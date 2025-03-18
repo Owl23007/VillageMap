@@ -15,7 +15,6 @@ import java.util.stream.Collectors;
 public class RoadServiceImpl implements RoadService {
     private final RoadDao roadDao;
     private final VillageService villageService;
-    // 内存中存储当前道路数据
     private List<Road> roads;
 
     public RoadServiceImpl(RoadDao roadDao, VillageService villageService) {
@@ -30,6 +29,13 @@ public class RoadServiceImpl implements RoadService {
         }
     }
 
+    /**
+     * 添加道路
+     * 包含验证逻辑：
+     * 1. 检查起点终点村庄是否存在
+     * 2. 检查是否已存在相同道路
+     * 3. 自动计算道路长度
+     */
     @Override
     public boolean addRoad(Road road) {
         try {
@@ -160,18 +166,28 @@ public class RoadServiceImpl implements RoadService {
     
     @Override
     public boolean validateRoad(Road road) {
-        // 对于已有道路的验证
-        if (road == null || 
-            road.getStartId() <= 0 || road.getEndId() <= 0 ||
-            road.getLength() <= 0) {
+        if (road == null || road.getStartId() == null || road.getEndId() == null || 
+            road.getLength() <= 0 || road.getName() == null || road.getName().trim().isEmpty()) {
             return false;
         }
 
-        // 确保起点和终点村庄存在
-        return villageService.getVillageById(road.getStartId()) != null &&
-                villageService.getVillageById(road.getEndId()) != null;
+        // 验证起点和终点村庄是否存在
+        if (villageService.getVillageById(road.getStartId()) == null ||
+            villageService.getVillageById(road.getEndId()) == null) {
+            AlertUtils.showWarning("验证失败", "道路的起点或终点村庄不存在");
+            return false;
+        }
+
+        return true;
     }
 
+    /**
+     * 计算最短路径
+     * 使用Dijkstra算法实现：
+     * 1. 构建邻接图
+     * 2. 计算最短路径
+     * 3. 返回路径上的道路列表
+     */
     @Override
     public List<Road> calculateShortestPath(String startVillageId, String endVillageId) {
         try {
@@ -339,7 +355,6 @@ public class RoadServiceImpl implements RoadService {
     @Override
     public void saveRoads() {
         try {
-            // 显式保存方法
             roadDao.updateRoad(roads);
             log.info("保存道路数据成功，共{}条道路", roads.size());
         } catch (Exception e) {
@@ -351,17 +366,81 @@ public class RoadServiceImpl implements RoadService {
     @Override
     public void reloadRoads() {
         try {
-            // 重新从文件加载数据
-            this.roads = new ArrayList<>(roadDao.getAllRoads());
+            roads.clear();
+            roads.addAll(roadDao.getAllRoads());
+            validateRoadReferences(villageService);
             log.info("重新加载道路数据成功，共{}条道路", roads.size());
         } catch (Exception e) {
             log.error("重新加载道路数据失败", e);
             AlertUtils.showException("加载失败", "无法重新加载道路数据", e);
         }
     }
-    
+
     @Override
     public RoadDao getRoadDao() {
         return this.roadDao;
+    }
+
+    @Override
+    public boolean hasChanges() {
+        if (roadDao == null) {
+            return false;
+        }
+        try {
+            List<Road> savedRoads = roadDao.getAllRoads();
+            return !roads.equals(savedRoads);
+        } catch (Exception e) {
+            log.error("检查数据变更失败", e);
+            return false;
+        }
+    }
+
+    /**
+     * 验证道路引用的有效性
+     * 移除引用不存在村庄的道路
+     * @param villageService 村庄服务
+     */
+    @Override
+    public void validateRoadReferences(VillageService villageService) {
+        List<Road> roads = getAllRoads();
+        List<Road> invalidRoads = new ArrayList<>();
+        
+        for (Road road : roads) {
+            // 检查起点和终点村庄是否存在
+            boolean startExists = villageService.getVillageById(road.getStartId()) != null;
+            boolean endExists = villageService.getVillageById(road.getEndId()) != null;
+            
+            if (!startExists || !endExists) {
+                invalidRoads.add(road);
+                log.warn("发现无效道路引用: {} (起点: {}, 终点: {})", 
+                    road.getName(), road.getStartId(), road.getEndId());
+            }
+        }
+        
+        // 移除无效道路
+        for (Road invalidRoad : invalidRoads) {
+            roads.remove(invalidRoad);
+            log.info("已移除无效道路: {}", invalidRoad.getName());
+        }
+        
+        // 如果有无效道路被移除，保存更新后的道路数据
+        if (!invalidRoads.isEmpty()) {
+            saveRoads();
+            log.info("已移除 {} 条无效道路引用", invalidRoads.size());
+        }
+    }
+
+    @Override
+    public void createNewRoads() {
+        try {
+            if (roads == null) {
+                roads = new ArrayList<>();
+            }
+            roads.clear();
+            log.info("已创建新的空白道路数据");
+        } catch (Exception e) {
+            log.error("创建新的道路数据失败", e);
+            AlertUtils.showException("创建失败", "无法创建新的道路数据", e);
+        }
     }
 }

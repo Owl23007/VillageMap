@@ -14,6 +14,8 @@
 				<!-- 菜单项保持不变 -->
 				<Menu text="文件">
 					<MenuItem onAction="#onOpen" text="打开" />
+					<MenuItem onAction="#onOpenVillage" text="打开村庄文件" />
+					<MenuItem onAction="#onOpenRoad" text="打开道路文件" />
 					<MenuItem onAction="#onSave" text="保存" />
 					<MenuItem onAction="#onSaveAs" text="另存为" />
 					<SeparatorMenuItem />

@@ -4,11 +4,11 @@ module cn.woyioii.villagemap {
     requires static lombok;
     requires com.google.gson;
     requires org.slf4j;
+    requires transitive javafx.graphics;
 
     opens cn.woyioii.model to com.google.gson, javafx.base;
     opens cn.woyioii.controller to javafx.fxml;
-
-    opens images;
+    opens cn.woyioii.dao to com.google.gson;
 
     exports cn.woyioii;
     exports cn.woyioii.controller;
@@ -16,4 +16,5 @@ module cn.woyioii.villagemap {
     exports cn.woyioii.util;
     exports cn.woyioii.model;
     exports cn.woyioii.handler;
+    exports cn.woyioii.dao;
 }

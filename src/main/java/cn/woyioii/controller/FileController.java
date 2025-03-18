@@ -3,111 +3,189 @@ package cn.woyioii.controller;
 import cn.woyioii.service.RoadService;
 import cn.woyioii.service.VillageService;
 import cn.woyioii.util.AlertUtils;
+import javafx.stage.Window;
+import cn.woyioii.handler.ErrorHandler;
 import lombok.extern.slf4j.Slf4j;
-import java.util.List;
-import cn.woyioii.model.Village;
-import cn.woyioii.model.Road;
 import javafx.stage.FileChooser;
-import javafx.stage.Stage;
 import java.io.File;
+import java.util.Optional;
+import java.io.IOException;
 
 @Slf4j
 public class FileController {
+    // 文件选择器
+    private final FileChooser fileChooser;
+
+    // 文件后缀常量
+    private static final String VILLAGE_SUFFIX = "-village.json";
+    private static final String ROAD_SUFFIX = "-road.json";
+
+    public FileController() {
+        this.fileChooser = new FileChooser();
+        // 设置文件过滤器
+        this.fileChooser.getExtensionFilters().addAll(
+            new FileChooser.ExtensionFilter("JSON 文件", "*.json"),
+            new FileChooser.ExtensionFilter("所有文件", "*.*")
+        );
+    }
+
     /**
-     * 保存所有数据到当前文件
+     * 保存所有数据到文件
      * @param villageService 村庄服务
      * @param roadService 道路服务
-     * @return 保存成功返回true，否则返回false
      */
-    public static boolean saveAllData(VillageService villageService, RoadService roadService) {
-        try {
-            // 保存村庄和道路数据
+    public static void saveAllData(VillageService villageService, RoadService roadService) {
+        ErrorHandler.safeExecute("保存数据", () -> {
             villageService.saveVillages();
+            roadService.validateRoadReferences(villageService); // 保存前验证引用
             roadService.saveRoads();
-            log.info("所有数据保存成功");
+            log.info("所有数据已成功保存");
+        });
+    }
+    
+    // 创建新的空白数据
+    public void createNewData(VillageService villageService, RoadService roadService) {
+        try {
+            // 清空内存中的数据
+            villageService.createNewVillages();
+            roadService.createNewRoads();
+            log.info("已创建新的空白数据");
+        } catch (Exception e) {
+            log.error("创建新数据失败", e);
+            AlertUtils.showException("创建失败", "无法创建新的空白数据", e);
+        }
+    }
+
+    // 打开文件对话框
+    public Optional<File> showOpenDialog(Window window) {
+        fileChooser.setTitle("打开村庄数据文件");
+        File file = fileChooser.showOpenDialog(window);
+        return Optional.ofNullable(file);
+    }
+
+    // 保存文件对话框
+    public Optional<File> showSaveDialog(Window window) {
+        fileChooser.setTitle("保存村庄数据文件");
+        File file = fileChooser.showSaveDialog(window);
+        return Optional.ofNullable(file);
+    }
+
+    /**
+     * 加载数据文件
+     * @param baseFile 基础文件
+     * @param villageService 村庄服务
+     * @param roadService 道路服务
+     * @return 是否加载成功
+     */
+    public boolean loadData(File baseFile, VillageService villageService, RoadService roadService) {
+        try {
+            String basePath = baseFile.getParent();
+            String baseName = baseFile.getName().replace(".json", "");
+            
+            // 首先加载村庄数据
+            File villageFile = findMatchingFile(basePath, baseName + "-village");
+            if (villageFile == null || !villageFile.exists()) {
+                villageFile = baseFile; // 如果没有专门的村庄文件，使用基础文件
+            }
+            
+            if (!villageFile.exists()) {
+                throw new IOException("找不到村庄数据文件: " + villageFile);
+            }
+            
+            // 设置并加载村庄数据
+            villageService.getVillageDao().setFilePath(villageFile.getAbsolutePath());
+            villageService.reloadVillages();
+            
+            // 加载道路数据
+            File roadFile = findMatchingFile(basePath, baseName + "-road");
+            if (roadFile != null && roadFile.exists()) {
+                roadService.getRoadDao().setFilePath(roadFile.getAbsolutePath());
+                roadService.reloadRoads();
+                validateRoadReferences(roadService, villageService);
+            } else {
+                log.info("未找到道路数据文件，创建空的道路集合");
+                roadService.createNewRoads();
+            }
+            
+            log.info("数据加载成功 - 村庄文件: {}, 道路文件: {}", villageFile, roadFile);
             return true;
         } catch (Exception e) {
-            log.error("保存数据失败", e);
-            AlertUtils.showException("保存失败", "无法保存数据", e);
-            return false;
+            log.error("加载数据失败: {}", e.getMessage(), e);
+            throw new RuntimeException("加载数据失败: " + e.getMessage(), e);
         }
     }
     
-    /**
-     * 打开文件对话框选择数据文件并加载
-     * @param stage 父窗口
-     * @param villageService 村庄服务
-     * @param roadService 道路服务
-     * @return 加载成功返回true，否则返回false
-     */
-    public static boolean openDataFiles(Stage stage, VillageService villageService, RoadService roadService) {
+    private void validateRoadReferences(RoadService roadService, VillageService villageService) {
+        // 验证road数据中的村庄ID引用是否有效，无效则移除
+        roadService.validateRoadReferences(villageService);
+    }
+
+    private File findMatchingFile(String basePath, String prefix) {
+        File file = new File(basePath, prefix + ".json");
+        if (file.exists()) {
+            return file;
+        }
+        return null;
+    }
+
+    // 保存数据到文件
+    public boolean saveData(File baseFile, VillageService villageService, RoadService roadService) {
         try {
-            FileChooser fileChooser = new FileChooser();
-            fileChooser.setTitle("选择村庄数据文件");
-            fileChooser.getExtensionFilters().add(
-                new FileChooser.ExtensionFilter("JSON文件", "*.json")
+            String basePath = baseFile.getParent();
+            String baseName = baseFile.getName().replace(".json", "");
+            
+            // 确保目标目录存在
+            File directory = new File(basePath);
+            if (!directory.exists() && !directory.mkdirs()) {
+                throw new IOException("无法创建目标目录: " + basePath);
+            }
+            
+            // 保存村庄数据
+            File villageFile = new File(basePath, baseName + VILLAGE_SUFFIX);
+            villageService.getVillageDao().saveVillage(
+                villageService.getAllVillages(), 
+                villageFile.getAbsolutePath()
             );
             
-            // 选择村庄文件
-            File villageFile = fileChooser.showOpenDialog(stage);
-            if (villageFile != null) {
-                // 更新村庄DAO文件路径并重新加载
-                villageService.getVillageDao().setFilePath(villageFile.getAbsolutePath());
-                villageService.reloadVillages();
-                
-                // 选择道路文件
-                fileChooser.setTitle("选择道路数据文件");
-                File roadFile = fileChooser.showOpenDialog(stage);
-                if (roadFile != null) {
-                    roadService.getRoadDao().setFilePath(roadFile.getAbsolutePath());
-                    roadService.reloadRoads();
-                    return true;
-                }
-            }
-            return false;
+            // 保存道路数据
+            File roadFile = new File(basePath, baseName + ROAD_SUFFIX);
+            roadService.validateRoadReferences(villageService); // 确保引用有效
+            roadService.getRoadDao().saveRoad(
+                roadService.getAllRoads(), 
+                roadFile.getAbsolutePath()
+            );
+            
+            log.info("成功保存数据，村庄文件: {}, 道路文件: {}", villageFile, roadFile);
+            return true;
         } catch (Exception e) {
-            log.error("打开数据文件失败", e);
-            AlertUtils.showException("打开失败", "无法打开数据文件", e);
-            return false;
+            log.error("保存数据失败: {}", e.getMessage(), e);
+            throw new RuntimeException("保存数据失败: " + e.getMessage(), e);
         }
     }
-    
-    /**
-     * 另存为新文件
-     * @param stage 父窗口
-     * @param villageService 村庄服务
-     * @param roadService 道路服务
-     * @return 保存成功返回true，否则返回false
-     */
-    public static boolean saveAsNewFile(Stage stage, VillageService villageService, RoadService roadService) {
+
+    // 单独加载村庄数据
+    public boolean loadVillageData(File file, VillageService villageService) {
         try {
-            FileChooser fileChooser = new FileChooser();
-            fileChooser.setTitle("保存村庄数据文件");
-            fileChooser.getExtensionFilters().add(
-                new FileChooser.ExtensionFilter("JSON文件", "*.json")
-            );
-            
-            // 选择村庄保存位置
-            File villageFile = fileChooser.showSaveDialog(stage);
-            if (villageFile != null) {
-                // 保存村庄数据到新文件
-                List<Village> villages = villageService.getAllVillages();
-                villageService.getVillageDao().saveVillage(villages, villageFile.getAbsolutePath());
-                
-                // 选择道路保存位置
-                fileChooser.setTitle("保存道路数据文件");
-                File roadFile = fileChooser.showSaveDialog(stage);
-                if (roadFile != null) {
-                    List<Road> roads = roadService.getAllRoads();
-                    roadService.getRoadDao().saveRoad(roads, roadFile.getAbsolutePath());
-                    return true;
-                }
-            }
-            return false;
+            villageService.getVillageDao().setFilePath(file.getAbsolutePath());
+            villageService.reloadVillages();
+            log.info("村庄数据加载成功: {}", file);
+            return true;
         } catch (Exception e) {
-            log.error("另存为新文件失败", e);
-            AlertUtils.showException("保存失败", "无法保存为新文件", e);
-            return false;
+            log.error("加载村庄数据失败: {}", e.getMessage(), e);
+            throw new RuntimeException("加载村庄数据失败: " + e.getMessage(), e);
+        }
+    }
+
+    // 单独加载道路数据
+    public boolean loadRoadData(File file, RoadService roadService) {
+        try {
+            roadService.getRoadDao().setFilePath(file.getAbsolutePath());
+            roadService.reloadRoads();
+            log.info("道路数据加载成功: {}", file);
+            return true;
+        } catch (Exception e) {
+            log.error("加载道路数据失败: {}", e.getMessage(), e);
+            throw new RuntimeException("加载道路数据失败: " + e.getMessage(), e);
         }
     }
 }

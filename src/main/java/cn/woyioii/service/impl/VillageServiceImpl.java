@@ -6,9 +6,9 @@ import cn.woyioii.service.VillageService;
 import cn.woyioii.util.AlertUtils;
 import lombok.extern.slf4j.Slf4j;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.ArrayList;
 import java.util.function.Consumer;
 
 @Slf4j
@@ -16,6 +16,7 @@ public class VillageServiceImpl implements VillageService {
     private final VillageDao villageDao;
     // 内存中存储当前村庄数据
     private List<Village> villages;
+    // 数据变更监听器
     private Consumer<Void> onDataChanged;
 
     // 依赖注入
@@ -31,6 +32,7 @@ public class VillageServiceImpl implements VillageService {
     }
 
     private void notifyDataChanged() {
+        // 通知数据已更改
         if (onDataChanged != null) {
             onDataChanged.accept(null);
         }
@@ -176,5 +178,30 @@ public class VillageServiceImpl implements VillageService {
     @Override
     public VillageDao getVillageDao() {
         return villageDao;
+    }
+
+    @Override
+    public boolean hasChanges() {
+        if (villageDao == null) {
+            return false;
+        }
+        try {
+            List<Village> savedVillages = villageDao.getAllVillages();
+            return !villages.equals(savedVillages);
+        } catch (Exception e) {
+            log.error("检查数据变更失败", e);
+            return false;
+        }
+    }
+    
+    @Override
+    public void createNewVillages() {
+        try {
+            villages.clear();
+            log.info("已创建新的空白村庄数据");
+        } catch (Exception e) {
+            log.error("创建新的村庄数据失败", e);
+            AlertUtils.showException("创建失败", "无法创建新的村庄数据", e);
+        }
     }
 }

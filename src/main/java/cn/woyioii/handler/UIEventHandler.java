@@ -1,37 +1,177 @@
 package cn.woyioii.handler;
 
-import cn.woyioii.controller.MainController;
 import cn.woyioii.model.Road;
 import cn.woyioii.model.Village;
 import cn.woyioii.service.RoadService;
 import cn.woyioii.service.VillageService;
 import cn.woyioii.util.AlertUtils;
+import cn.woyioii.util.MapCalculator;
 import javafx.geometry.Insets;
 import javafx.scene.control.*;
 import javafx.scene.layout.GridPane;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.Optional;
 
+@Slf4j
 public class UIEventHandler {
+    // 事件监听器接口
+    public interface UIEventListener {
+        void onDataChanged();
+        void onRefreshRequired();
+        Road getSelectedRoad();
+        Village getSelectedVillage();
+    }
+
     private final VillageService villageService;
     private final RoadService roadService;
-    private final MainController controller;
+    private final UIEventListener listener;
 
-    public UIEventHandler(VillageService villageService, RoadService roadService, MainController controller) {
+    public UIEventHandler(VillageService villageService, RoadService roadService, UIEventListener listener) {
         this.villageService = villageService;
         this.roadService = roadService;
-        this.controller = controller;
+        this.listener = listener;
     }
 
     public void handleAddVillage() {
+        Optional<Village> result = showVillageDialog(null, "添加村庄", "请输入村庄信息", "添加");
+        result.ifPresent(village -> {
+            if (villageService.addVillage(village)) {
+                notifyDataChanged();
+                AlertUtils.showInformation("添加成功", "村庄添加成功");
+            } else {
+                AlertUtils.showError("添加失败", "可能ID已存在或数据无效");
+            }
+        });
+    }
+
+    public void handleAddRoad() {
+        Optional<Road> result = showRoadDialog(null, "添加道路", "请输入道路信息", "添加");
+        result.ifPresent(road -> {
+            if (roadService.addRoad(road)) {
+                notifyDataChanged();
+                AlertUtils.showInformation("添加成功", "道路添加成功");
+            } else {
+                AlertUtils.showError("添加失败", "可能该路径已存在或数据无效");
+            }
+        });
+    }
+
+    public void handleDeleteVillage() {
+        Village selected = listener.getSelectedVillage();
+        if (selected == null) {
+            AlertUtils.showWarning("未选择", "请先从表格中选择要删除的村庄");
+            return;
+        }
+
+        // 检查是否有相关联的道路
+        boolean hasConnectedRoads = roadService.getAllRoads().stream()
+                .anyMatch(road -> road.getStartId().equals(selected.getId()) ||
+                        road.getEndId().equals(selected.getId()));
+
+        boolean confirm;
+        if (hasConnectedRoads) {
+            confirm = AlertUtils.showConfirmation("确认删除",
+                    "删除该村庄将同时删除所有相关联的道路，是否继续？");
+        } else {
+            confirm = AlertUtils.showConfirmation("确认删除",
+                    "确定要删除村庄 " + selected.getName() + " 吗？");
+        }
+        if (!confirm) return;
+
+        // 执行删除操作
+        if (villageService.deleteVillage(selected.getId())) {
+            // 删除相关道路
+            if (hasConnectedRoads) {
+                roadService.getAllRoads().stream()
+                        .filter(road -> road.getStartId().equals(selected.getId()) ||
+                                road.getEndId().equals(selected.getId()))
+                        .forEach(roadService::deleteRoad);
+            }
+
+            notifyDataChanged();
+            AlertUtils.showInformation("删除成功", "村庄已成功删除");
+        } else {
+            AlertUtils.showError("删除失败", "无法删除村庄，请稍后重试");
+        }
+    }
+
+    public void handleDeleteRoad() {
+        Road selected = listener.getSelectedRoad();
+        if (selected == null) {
+            AlertUtils.showWarning("未选择", "请先从表格中选择要删除的道路");
+            return;
+        }
+
+        boolean confirm = AlertUtils.showConfirmation("确认删除",
+                "确定要删除这条道路吗？");
+        if (!confirm) return;
+
+        if (roadService.deleteRoad(selected)) {
+            notifyDataChanged();
+            AlertUtils.showInformation("删除成功", "道路已成功删除");
+        } else {
+            AlertUtils.showError("删除失败", "无法删除道路，请稍后重试");
+        }
+    }
+
+    public void handleCalculateShortestPath() {
+        //todo
+    }
+
+    public void handleEditVillage() {
+        Village selectedVillage = listener.getSelectedVillage();
+        if (selectedVillage == null) {
+            AlertUtils.showWarning("未选择", "请先从表格中选择要编辑的村庄");
+            return;
+        }
+
+        Optional<Village> result = showVillageDialog(selectedVillage, "编辑村庄", "修改村庄信息", "保存");
+        result.ifPresent(village -> {
+            if (villageService.updateVillage(village)) {
+                notifyDataChanged();
+                AlertUtils.showInformation("更新成功", "村庄信息已更新");
+            } else {
+                AlertUtils.showError("更新失败", "无法更新村庄信息，请检查数据有效性");
+            }
+        });
+    }
+
+    public void handleEditRoad() {
+        Road selectedRoad = listener.getSelectedRoad();
+        if (selectedRoad == null) {
+            AlertUtils.showWarning("未选择", "请先从表格中选择要编辑的道路");
+            return;
+        }
+
+        Optional<Road> result = showRoadDialog(selectedRoad, "编辑道路", "修改道路信息", "保存");
+        result.ifPresent(road -> {
+            if (roadService.updateRoad(road)) {
+                notifyDataChanged();
+                AlertUtils.showInformation("更新成功", "道路信息已更新");
+            } else {
+                AlertUtils.showError("更新失败", "无法更新道路信息，请检查数据有效性");
+            }
+        });
+    }
+
+    /**
+     * 显示村庄表单对话框
+     * @param village 要编辑的村庄，如果是新增则为null
+     * @param title 对话框标题
+     * @param headerText 对话框头部文本
+     * @param buttonText 确认按钮文本
+     * @return 可选的村庄对象
+     */
+    private Optional<Village> showVillageDialog(Village village, String title, String headerText, String buttonText) {
         // 创建对话框
         Dialog<Village> dialog = new Dialog<>();
-        dialog.setTitle("添加村庄");
-        dialog.setHeaderText("请输入村庄信息");
+        dialog.setTitle(title);
+        dialog.setHeaderText(headerText);
 
         // 设置按钮
-        ButtonType addButtonType = new ButtonType("添加", ButtonBar.ButtonData.OK_DONE);
-        dialog.getDialogPane().getButtonTypes().addAll(addButtonType, ButtonType.CANCEL);
+        ButtonType confirmButton = new ButtonType(buttonText, ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(confirmButton, ButtonType.CANCEL);
 
         // 创建表单
         GridPane grid = new GridPane();
@@ -39,12 +179,23 @@ public class UIEventHandler {
         grid.setVgap(10);
         grid.setPadding(new Insets(20, 150, 10, 10));
 
+        // 初始化控件
         TextField idField = new TextField();
         TextField nameField = new TextField();
         TextField xField = new TextField();
         TextField yField = new TextField();
         TextArea descriptionArea = new TextArea();
         descriptionArea.setPrefRowCount(3);
+
+        // 如果是编辑模式，填充现有数据
+        if (village != null) {
+            idField.setText(String.valueOf(village.getId()));
+            idField.setDisable(true); // ID不可编辑
+            nameField.setText(village.getName());
+            xField.setText(String.valueOf(village.getLocateX()));
+            yField.setText(String.valueOf(village.getLocateY()));
+            descriptionArea.setText(village.getDescription());
+        }
 
         grid.add(new Label("ID:"), 0, 0);
         grid.add(idField, 1, 0);
@@ -61,22 +212,27 @@ public class UIEventHandler {
 
         // 设置结果转换器
         dialog.setResultConverter(dialogButton -> {
-            if (dialogButton == addButtonType) {
+            if (dialogButton == confirmButton) {
                 try {
-                    String id = idField.getText();
                     String name = nameField.getText();
                     int x = Integer.parseInt(xField.getText());
                     int y = Integer.parseInt(yField.getText());
                     String description = descriptionArea.getText();
-                    Village village = new Village();
 
-                    village.setId(Integer.parseInt(id));
-                    village.setName(name);
-                    village.setLocateX(x);
-                    village.setLocateY(y);
-                    village.setDescription(description);
+                    Village result = new Village();
+                    // 如果是编辑模式，使用原有ID，否则解析用户输入ID
+                    if (village != null) {
+                        result.setId(village.getId());
+                    } else {
+                        result.setId(Integer.parseInt(idField.getText()));
+                    }
 
-                    return village;
+                    result.setName(name);
+                    result.setLocateX(x);
+                    result.setLocateY(y);
+                    result.setDescription(description);
+
+                    return result;
                 } catch (NumberFormatException e) {
                     AlertUtils.showError("输入错误", "坐标必须是有效的数字");
                     return null;
@@ -85,28 +241,26 @@ public class UIEventHandler {
             return null;
         });
 
-        // 显示对话框并处理结果
-        Optional<Village> result = dialog.showAndWait();
-        result.ifPresent(village -> {
-            if (villageService.addVillage(village)) {
-                controller.markDataAsModified();
-                controller.refreshUI();
-                AlertUtils.showInformation("添加成功", "村庄添加成功");
-            } else {
-                AlertUtils.showError("添加失败", "可能ID已存在或数据无效");
-            }
-        });
+        return dialog.showAndWait();
     }
 
-    public void handleAddRoad() {
+    /**
+     * 显示道路表单对话框
+     * @param road 要编辑的道路，如果是新增则为null
+     * @param title 对话框标题
+     * @param headerText 对话框头部文本
+     * @param buttonText 确认按钮文本
+     * @return 可选的道路对象
+     */
+    private Optional<Road> showRoadDialog(Road road, String title, String headerText, String buttonText) {
         // 创建对话框
         Dialog<Road> dialog = new Dialog<>();
-        dialog.setTitle("添加道路");
-        dialog.setHeaderText("请输入道路信息");
+        dialog.setTitle(title);
+        dialog.setHeaderText(headerText);
 
         // 设置按钮
-        ButtonType addButtonType = new ButtonType("添加", ButtonBar.ButtonData.OK_DONE);
-        dialog.getDialogPane().getButtonTypes().addAll(addButtonType, ButtonType.CANCEL);
+        ButtonType confirmButton = new ButtonType(buttonText, ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(confirmButton, ButtonType.CANCEL);
 
         // 创建表单
         GridPane grid = new GridPane();
@@ -114,26 +268,60 @@ public class UIEventHandler {
         grid.setVgap(10);
         grid.setPadding(new Insets(20, 150, 10, 10));
 
-        // 创建村庄下拉选择框
+        // 村庄选择下拉框
         ComboBox<Village> startVillageCombo = new ComboBox<>();
         ComboBox<Village> endVillageCombo = new ComboBox<>();
         startVillageCombo.getItems().addAll(villageService.getAllVillages());
         endVillageCombo.getItems().addAll(villageService.getAllVillages());
 
+        // 其他字段
+        Label idValueLabel = new Label(road != null ? String.valueOf(road.getId()) : "");
         TextField nameField = new TextField();
+        TextField lengthField = new TextField();
 
-        grid.add(new Label("起点村庄:"), 0, 0);
-        grid.add(startVillageCombo, 1, 0);
-        grid.add(new Label("终点村庄:"), 0, 1);
-        grid.add(endVillageCombo, 1, 1);
-        grid.add(new Label("道路名称:"), 0, 2);
-        grid.add(nameField, 1, 2);
+        // 如果是编辑模式，填充现有数据
+        if (road != null) {
+            // 获取当前的起点和终点村庄对象
+            Village startVillage = villageService.getVillageById(road.getStartId());
+            Village endVillage = villageService.getVillageById(road.getEndId());
+
+            // 设置默认选中的村庄
+            if (startVillage != null) {
+                startVillageCombo.setValue(startVillage);
+            }
+            if (endVillage != null) {
+                endVillageCombo.setValue(endVillage);
+            }
+
+            nameField.setText(road.getName());
+            lengthField.setText(String.valueOf(road.getLength()));
+        }
+
+        // 添加控件到表单
+        int row = 0;
+        if (road != null) {
+            grid.add(new Label("ID:"), 0, row);
+            grid.add(idValueLabel, 1, row++);
+        }
+
+        grid.add(new Label("起点村庄:"), 0, row);
+        grid.add(startVillageCombo, 1, row++);
+        grid.add(new Label("终点村庄:"), 0, row);
+        grid.add(endVillageCombo, 1, row++);
+        grid.add(new Label("道路名称:"), 0, row);
+        grid.add(nameField, 1, row++);
+
+        // 添加长度字段（编辑时显示，新增时自动计算）
+        if (road != null) {
+            grid.add(new Label("长度(km):"), 0, row);
+            grid.add(lengthField, 1, row);
+        }
 
         dialog.getDialogPane().setContent(grid);
 
         // 设置结果转换器
         dialog.setResultConverter(dialogButton -> {
-            if (dialogButton == addButtonType) {
+            if (dialogButton == confirmButton) {
                 try {
                     Village start = startVillageCombo.getValue();
                     Village end = endVillageCombo.getValue();
@@ -149,225 +337,40 @@ public class UIEventHandler {
                         return null;
                     }
 
-                    // 自动计算两点之间的距离
-                    double length = Math.round(Math.sqrt(
-                            Math.pow(end.getLocateX() - start.getLocateX(), 2) +
-                                    Math.pow(end.getLocateY() - start.getLocateY(), 2)
-                    ) / 10 * 10) / 10.0;
-                    
-                    return new Road(start.getId(), end.getId(), name, length);
-                } catch (Exception e) {
-                    AlertUtils.showError("输入错误", "创建道路时出错: " + e.getMessage());
+                    double length;
+                    Road result;
+                    if (road != null && !lengthField.getText().isEmpty()) {
+                        // 编辑模式
+                        length = Double.parseDouble(lengthField.getText());
+                        result = new Road(start.getId(), end.getId(), name, length);
+                    } else {
+                        // 新增模式
+                        result = new Road(start.getId(), end.getId(), name);
+                        // 自动计算长度
+                        length = MapCalculator.calculateDistance(start, end);
+                        result.setLength(length);
+                    }
+
+                    if (road != null) {
+                        result.setId(road.getId()); // 保留原ID
+                    }
+
+                    return result;
+                } catch (NumberFormatException e) {
+                    AlertUtils.showError("输入错误", "长度必须是有效的数字");
                     return null;
                 }
             }
             return null;
         });
 
-        // 显示对话框并处理结果
-        Optional<Road> result = dialog.showAndWait();
-        result.ifPresent(road -> {
-            if (roadService.addRoad(road)) {
-                controller.markDataAsModified();
-                controller.refreshUI();
-                AlertUtils.showInformation("添加成功", "道路添加成功");
-            } else {
-                AlertUtils.showError("添加失败", "可能该路径已存在或数据无效");
-            }
-        });
+        return dialog.showAndWait();
     }
 
-    public void handleDeleteVillage() {
-        Village selected = controller.getSelectedVillage();
-        if (selected == null) {
-            AlertUtils.showWarning("未选择", "请先从表格中选择要删除的村庄");
-            return;
-        }
-
-        // 检查是否有相关联的道路
-        boolean hasConnectedRoads = roadService.getAllRoads().stream()
-                .anyMatch(road -> road.getStartId().equals(selected.getId()) ||
-                        road.getEndId().equals(selected.getId()));
-
-        if (hasConnectedRoads) {
-            boolean confirm = AlertUtils.showConfirmation("确认删除",
-                    "删除该村庄将同时删除所有相关联的道路，是否继续？");
-            if (!confirm) return;
-        } else {
-            boolean confirm = AlertUtils.showConfirmation("确认删除",
-                    "确定要删除村庄 " + selected.getName() + " 吗？");
-            if (!confirm) return;
-        }
-
-        // 执行删除操作
-        if (villageService.deleteVillage(selected.getId())) {
-            // 删除相关道路
-            if (hasConnectedRoads) {
-                roadService.getAllRoads().stream()
-                        .filter(road -> road.getStartId().equals(selected.getId()) ||
-                                road.getEndId().equals(selected.getId()))
-                        .forEach(road -> roadService.deleteRoad(road));
-            }
-
-            controller.markDataAsModified();
-            controller.refreshUI();
-            AlertUtils.showInformation("删除成功", "村庄已成功删除");
-        } else {
-            AlertUtils.showError("删除失败", "无法删除村庄，请稍后重试");
-        }
-    }
-
-    public void handleDeleteRoad() {
-        Road selected = controller.getSelectedRoad();
-        if (selected == null) {
-            AlertUtils.showWarning("未选择", "请先从表格中选择要删除的道路");
-            return;
-        }
-
-        boolean confirm = AlertUtils.showConfirmation("确认删除",
-                "确定要删除这条道路吗？");
-        if (!confirm) return;
-
-        if (roadService.deleteRoad(selected)) {
-            controller.markDataAsModified();
-            controller.refreshUI();
-            AlertUtils.showInformation("删除成功", "道路已成功删除");
-        } else {
-            AlertUtils.showError("删除失败", "无法删除道路，请稍后重试");
-        }
-    }
-
-    public void handleCalculateShortestPath() {
-        // 最短路径计算逻辑保留原有注释
-        // 1. 选择起点和终点村庄
-        // 2. 调用roadService.calculateShortestPath方法
-        // 3. 显示结果
-    }
-
-    public void handleEditRoad() {
-        // Get selected road
-        Road selectedRoad = controller.getSelectedRoad();
-        if (selectedRoad == null) {
-            AlertUtils.showWarning("未选择", "请先从表格中选择要编辑的道路");
-            return;
-        }
-
-        // Create dialog
-        Dialog<Road> dialog = new Dialog<>();
-        dialog.setTitle("编辑道路");
-        dialog.setHeaderText("修改道路信息");
-
-        ButtonType saveButtonType = new ButtonType("保存", ButtonBar.ButtonData.OK_DONE);
-        dialog.getDialogPane().getButtonTypes().addAll(saveButtonType, ButtonType.CANCEL);
-
-        // Create form
-        GridPane grid = new GridPane();
-        grid.setHgap(10);
-        grid.setVgap(10);
-        grid.setPadding(new Insets(20, 150, 10, 10));
-
-        // Get current villages
-        Village startVillage = villageService.getVillageById(selectedRoad.getStartId());
-        Village endVillage = villageService.getVillageById(selectedRoad.getEndId());
-
-        Label idValueLabel = new Label(String.valueOf(selectedRoad.getId()));
-
-        // Create village dropdowns
-        ComboBox<Village> startVillageCombo = new ComboBox<>();
-        ComboBox<Village> endVillageCombo = new ComboBox<>();
-        startVillageCombo.getItems().addAll(villageService.getAllVillages());
-        endVillageCombo.getItems().addAll(villageService.getAllVillages());
-
-        // Set default selections
-        if (startVillage != null) startVillageCombo.setValue(startVillage);
-        if (endVillage != null) endVillageCombo.setValue(endVillage);
-
-        TextField nameField = new TextField(selectedRoad.getName());
-
-        // Make length field read-only
-        TextField lengthField = new TextField(String.valueOf(selectedRoad.getLength()));
-        lengthField.setEditable(false);
-        lengthField.setStyle("-fx-background-color: #f0f0f0;");
-
-        // Update length when villages change
-        startVillageCombo.setOnAction(e -> updateLength(startVillageCombo, endVillageCombo, lengthField));
-        endVillageCombo.setOnAction(e -> updateLength(startVillageCombo, endVillageCombo, lengthField));
-
-        grid.add(new Label("ID:"), 0, 0);
-        grid.add(idValueLabel, 1, 0);
-        grid.add(new Label("起点村庄:"), 0, 1);
-        grid.add(startVillageCombo, 1, 1);
-        grid.add(new Label("终点村庄:"), 0, 2);
-        grid.add(endVillageCombo, 1, 2);
-        grid.add(new Label("道路名称:"), 0, 3);
-        grid.add(nameField, 1, 3);
-        grid.add(new Label("长度(km):"), 0, 4);
-        grid.add(lengthField, 1, 4);
-        grid.add(new Label("(自动根据村庄位置计算)"), 1, 5);
-
-        dialog.getDialogPane().setContent(grid);
-
-        // Set result converter
-        dialog.setResultConverter(dialogButton -> {
-            if (dialogButton == saveButtonType) {
-                try {
-                    Village start = startVillageCombo.getValue();
-                    Village end = endVillageCombo.getValue();
-                    String name = nameField.getText();
-
-                    if (start == null || end == null) {
-                        AlertUtils.showError("输入错误", "请选择起点和终点村庄");
-                        return null;
-                    }
-
-                    if (start.equals(end)) {
-                        AlertUtils.showError("输入错误", "起点和终点不能是同一个村庄");
-                        return null;
-                    }
-
-                    // Calculate length based on village positions
-                    double length = calculateDistance(start, end);
-
-                    // Create new road object with original ID
-                    Road updatedRoad = new Road(start.getId(), end.getId(), name, length);
-                    return updatedRoad;
-                } catch (Exception e) {
-                    AlertUtils.showError("输入错误", "处理数据时出错: " + e.getMessage());
-                    return null;
-                }
-            }
-            return null;
-        });
-
-        // Show dialog and process result
-        Optional<Road> result = dialog.showAndWait();
-        result.ifPresent(road -> {
-            if (roadService.updateRoad(road)) {
-                controller.markDataAsModified();
-                controller.refreshUI();
-                AlertUtils.showInformation("更新成功", "道路信息已更新");
-            } else {
-                AlertUtils.showError("更新失败", "无法更新道路信息，请检查数据有效性");
-            }
-        });
-    }
-
-    // Helper method to calculate distance between villages
-    private double calculateDistance(Village start, Village end) {
-        return Math.round(Math.sqrt(
-                Math.pow(end.getLocateX() - start.getLocateX(), 2) +
-                        Math.pow(end.getLocateY() - start.getLocateY(), 2)
-        ) * 10) / 10.0;
-    }
-
-    // Helper method to update length field
-    private void updateLength(ComboBox<Village> startCombo, ComboBox<Village> endCombo, TextField lengthField) {
-        Village start = startCombo.getValue();
-        Village end = endCombo.getValue();
-
-        if (start != null && end != null) {
-            double length = calculateDistance(start, end);
-            lengthField.setText(String.valueOf(length));
+    private void notifyDataChanged() {
+        if (listener != null) {
+            listener.onDataChanged();
+            listener.onRefreshRequired();
         }
     }
 }
