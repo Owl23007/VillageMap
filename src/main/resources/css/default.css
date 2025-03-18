@@ -69,11 +69,48 @@
     -fx-background-radius: 4;
 }
 
+.operations-panel .text-area {
+    -fx-background-color: #f8f8f8;
+    -fx-border-color: #e0e0e0;
+    -fx-border-radius: 4;
+    -fx-background-radius: 4;
+}
+
+.operations-panel .text-area:focused {
+    -fx-border-color: #2196f3;
+}
+
+.operations-panel .table-view {
+    -fx-pref-height: 200;
+}
+
+.operations-panel .separator {
+    -fx-padding: 10 0;
+}
+
+.operations-panel .button {
+    -fx-min-width: 200;
+}
+
 .panel-title {
     -fx-font-size: 14px;
     -fx-font-weight: bold;
     -fx-text-fill: #2196f3;
     -fx-padding: 0 0 5 0;
+}
+
+/* Analysis Result Styles */
+.result-label {
+    -fx-text-fill: #1976d2;
+    -fx-font-weight: bold;
+}
+
+.error-label {
+    -fx-text-fill: #d32f2f;
+}
+
+.success-label {
+    -fx-text-fill: #388e3c;
 }
 
 /* Sidebar Button Styles */

@@ -10,54 +10,53 @@ import lombok.Setter;
 
 import java.util.ArrayList;
 import java.util.List;
+
 /**
  * <h1>地图渲染器</h1>
- * 负责在Canvas上绘制村庄和道路的可视化组件。
- *
- * <h2>核心功能：</h2>
+ * <p>负责在Canvas上绘制村庄和道路的可视化组件。</p>
+ * 
+ * <h2>功能说明</h2>
  * <ul>
- *     <li>清除画布内容</li>
- *     <li>绘制村庄节点</li>
- *     <li>绘制连接道路</li>
+ *   <li>负责在JavaFX Canvas上绘制村庄节点和连接道路</li>
+ *   <li>提供完整的地图可视化核心功能</li>
+ *   <li>支持交互式选择和高亮显示</li>
  * </ul>
- *
- * <h2>依赖说明：</h2>
- * <ul>
- *     <li>需要JavaFX的Canvas组件支持</li>
- *     <li>与{@code VillageService}协同工作以获取村庄信息</li>
- *     <li>使用{@code Village}和{@code Road}模型类</li>
- * </ul>
- *
- * <h2>使用须知：</h2>
- * <ul>
- *     <li>在使用前需要初始化Canvas对象</li>
- *     <li>所有绘制操作都在JavaFX应用线程中执行</li>
- *     <li>支持动态更新和重绘</li>
- * </ul>
- *
+ * 
+ * <h2>主要功能</h2>
+ * <ol>
+ *   <li>清除画布内容</li>
+ *   <li>绘制村庄节点（支持选中状态）</li>
+ *   <li>绘制村庄间连接道路</li>
+ *   <li>支持路径高亮显示</li>
+ *   <li>提供网格坐标系统</li>
+ *   <li>支持道路和村庄的悬停效果</li>
+ * </ol>
+ * 
  * @author woyioii
- * @see cn.woyioii.model.Village
- * @see cn.woyioii.model.Road
- * @see VillageService
  * @since 1.0
  */
 
 public class MapRenderer {
+    // Canvas相关字段
     private final Canvas canvas;
     private final GraphicsContext gc;
 
-    // 设置选中的村庄
-    // 存储当前选中的村庄和高亮路径
-    @Setter
-    private Village selectedVillage;
-    private List<Road> highlightedPath = new ArrayList<>();
+    // 状态相关字段
+    @Setter private Village selectedVillage;    // 当前选中的村庄
+    @Setter private Road hoveredRoad;          // 当前悬停的道路
+    private List<Road> highlightedPath = new ArrayList<>();  // 高亮显示的路径
 
-    // 基本颜色配置
-    private final Color villageColor = Color.BLUE;
-    private final Color selectedVillageColor = Color.RED;
-    private final Color selectedVillageGlowColor = Color.rgb(255, 100, 100, 0.3);
-    private final Color roadColor = Color.GRAY;
-    private final Color pathColor = Color.GREEN;
+    // 颜色配置
+    private final Color villageColor = Color.BLUE;           // 普通村庄颜色
+    private final Color selectedVillageColor = Color.RED;    // 选中村庄颜色
+    private final Color roadColor = Color.GRAY;              // 普通道路颜色
+    private final Color pathColor = Color.GREEN;             // 路径高亮颜色
+    private final Color hoveredRoadColor = Color.ORANGE;     // 悬停道路颜色
+
+    // 缓存数据
+    private List<Village> lastVillages = new ArrayList<>();
+    private List<Road> lastRoads = new ArrayList<>();
+    private VillageService lastVillageService;
 
     public MapRenderer(Canvas canvas) {
         this.canvas = canvas;
@@ -100,7 +99,10 @@ public class MapRenderer {
         this.highlightedPath.clear();
     }
 
-    // 绘制网格
+    /**
+     * 绘制网格系统
+     * 每10像素代表1公里，每100像素显示刻度
+     */
     public void drawGrid() {
         double width = canvas.getWidth();
         double height = canvas.getHeight();
@@ -144,7 +146,10 @@ public class MapRenderer {
         }
     }
 
-    // 绘制村庄
+    /**
+     * 绘制单个村庄
+     * 包含选中效果、发光效果和文字标注
+     */
     private void drawVillage(Village village) {
         double x = village.getLocateX();
         double y = village.getLocateY();
@@ -188,16 +193,19 @@ public class MapRenderer {
         // 绘制村庄名称
         if (village.equals(selectedVillage)) {
             gc.setFill(Color.RED);
-            gc.setFont(javafx.scene.text.Font.font(14)); // 选中时字体放大
+            gc.setFont(javafx.scene.text.Font.font(18)); // 选中时字体放大
             gc.fillText(village.getName(), x + radius + 5, y + 5);
         } else {
             gc.setFill(Color.BLACK);
-            gc.setFont(javafx.scene.text.Font.font(12));
+            gc.setFont(javafx.scene.text.Font.font(15));
             gc.fillText(village.getName(), x + radius + 3, y + 3);
         }
     }
 
-    // 绘制道路
+    /**
+     * 绘制道路连接
+     * 支持高亮显示和悬停效果
+     */
     private void drawRoad(Road road, VillageService villageService, boolean highlighted) {
         Village start = villageService.getVillageById(road.getStartId());
         Village end = villageService.getVillageById(road.getEndId());
@@ -208,28 +216,83 @@ public class MapRenderer {
             double x2 = end.getLocateX();
             double y2 = end.getLocateY();
 
-            // 设置高亮或普通道路颜色
+            // 设置道路样式
+            Color currentColor;
             if (highlighted) {
-                gc.setStroke(pathColor);
-                gc.setLineWidth(3); // 高亮路径加粗显示
+                currentColor = pathColor;
+                gc.setLineWidth(3);
+            } else if (road.equals(hoveredRoad)) {
+                currentColor = hoveredRoadColor;
+                gc.setLineWidth(2.5);
             } else {
-                gc.setStroke(roadColor);
-                gc.setLineWidth(2);
+                currentColor = roadColor;
+                gc.setLineWidth(1.5);
             }
+            gc.setStroke(currentColor);
 
             // 绘制道路线条
             gc.strokeLine(x1, y1, x2, y2);
 
-            // 绘制道路名称和距离
+            // 计算道路中点和角度
             double midX = (x1 + x2) / 2;
             double midY = (y1 + y2) / 2;
-            gc.setFill(Color.BLACK);
+            double angle = Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI;
+
+            // 保存当前图形状态
+            gc.save();
+            
+            // 绘制文本
             String roadInfo = road.getName() + " (" + road.getLength() + "km)";
-            gc.fillText(roadInfo, midX, midY);
+            
+            // 设置字体
+            gc.setFont(javafx.scene.text.Font.font(12));
+            gc.setTextAlign(javafx.scene.text.TextAlignment.CENTER);
+            gc.setTextBaseline(javafx.geometry.VPos.CENTER);
+            
+            // 平移到文本位置，增加垂直偏移以避免遮挡道路
+            double offsetDistance = -10;
+            double perpendicular = angle + Math.PI / 2;
+            
+            double offsetY = offsetDistance * Math.sin(perpendicular * Math.PI / 180);
+            gc.translate(midX, midY + offsetY);
+            
+            // 如果角度在90到270度之间，翻转文本以保证可读性
+            if (angle > 90 && angle <= 270) {
+                angle -= 180;
+            }
+            
+            // 旋转画布以绘制文本
+            gc.rotate(angle);
+            
+            // 创建文本背景
+            double padding = 2;
+            double textWidth = gc.getFont().getSize() * roadInfo.length() * 0.6;
+            double textHeight = gc.getFont().getSize() + 2;
+            
+            gc.setFill(Color.rgb(255, 255, 255, 0.85));
+            gc.fillRect(-textWidth/2 - padding, -textHeight/2 - padding,
+                       textWidth + padding * 2, textHeight + padding * 2);
+            
+            // 根据路径状态设置文本颜色
+            if (highlighted) {
+                gc.setFill(Color.rgb(0, 120, 0));  // 深绿色文字
+                gc.setFont(javafx.scene.text.Font.font(13));  // 稍微加大字号
+            } else if (road.equals(hoveredRoad)) {
+                gc.setFill(Color.rgb(200, 100, 0));  // 深橙色文字
+            } else {
+                gc.setFill(Color.BLACK);
+            }
+            gc.fillText(roadInfo, 0, 0);
+            
+            // 恢复图形状态
+            gc.restore();
         }
     }
 
-    // 重绘整张地图（包括高亮和选择）
+    /**
+     * 重绘整个地图
+     * 包括网格、道路和村庄的完整绘制
+     */
     public void redraw(List<Village> villages, List<Road> roads, VillageService villageService) {
         // 保存数据以供后续重绘使用
         this.lastVillages = new ArrayList<>(villages);
@@ -250,12 +313,16 @@ public class MapRenderer {
         redraw(List.copyOf(getLastVillages()), List.copyOf(getLastRoads()), getLastVillageService());
     }
     
-    // 添加字段用于保存最后一次绘制的数据
-    private List<Village> lastVillages = new ArrayList<>();
-    private List<Road> lastRoads = new ArrayList<>();
-    private VillageService lastVillageService;
+    // 高亮指定的道路
+    public void highlightRoad(Road road, Village start, Village end) {
+        // 更新悬停的道路
+        this.hoveredRoad = road;
+        
+        // 立即重绘地图以显示高亮效果
+        redraw(List.copyOf(getLastVillages()), List.copyOf(getLastRoads()), getLastVillageService());
+    }
     
-    // 添加获取方法
+    // Getter方法
     private List<Village> getLastVillages() {
         return lastVillages;
     }
@@ -266,8 +333,5 @@ public class MapRenderer {
     
     private VillageService getLastVillageService() {
         return lastVillageService;
-    }
-
-    public void highlightRoad(Road road, Village start, Village end) {
     }
 }

@@ -11,9 +11,8 @@
 	<top>
 		<VBox>
 			<MenuBar>
-				<!-- 菜单项保持不变 -->
 				<Menu text="文件">
-					<MenuItem onAction="#onOpen" text="打开" />
+					<MenuItem onAction="#onNew" text="新建" />
 					<MenuItem onAction="#onOpenVillage" text="打开村庄文件" />
 					<MenuItem onAction="#onOpenRoad" text="打开道路文件" />
 					<MenuItem onAction="#onSave" text="保存" />
@@ -62,7 +61,7 @@
 										<PropertyValueFactory property="id" />
 									</cellValueFactory>
 								</TableColumn>
-								<TableColumn prefWidth="80" text="名称">
+								<TableColumn text="名称">
 									<cellValueFactory>
 										<PropertyValueFactory property="name" />
 									</cellValueFactory>
@@ -109,7 +108,7 @@
 										<PropertyValueFactory property="id" />
 									</cellValueFactory>
 								</TableColumn>
-								<TableColumn prefWidth="80" text="名称">
+								<TableColumn text="名称">
 									<cellValueFactory>
 										<PropertyValueFactory property="name" />
 									</cellValueFactory>
@@ -151,77 +150,46 @@
 	<!-- 右侧信息面板 -->
 	<right>
 		<HBox spacing="5" prefWidth="350">
-			<!-- 左侧切换按钮区域 -->
-			<VBox spacing="10" styleClass="sidebar-buttons" alignment="TOP_CENTER" prefWidth="70">
-				<padding>
-					<Insets top="10" right="5" bottom="10" left="5" />
-				</padding>
-				<Button fx:id="villageTabButton" text="村庄" minWidth="60"
-				        styleClass="tab-button" onAction="#switchToVillageTab"/>
-				<Button fx:id="roadTabButton" text="道路" minWidth="60"
-				        styleClass="tab-button" onAction="#switchToRoadTab"/>
-				<Button fx:id="analysisTabButton" text="分析" minWidth="60"
-				        styleClass="tab-button" onAction="#switchToAnalysisTab"/>
-				<Button fx:id="routeTabButton" text="路径" minWidth="60"
-				        styleClass="tab-button" onAction="#switchToRouteTab"/>
-			</VBox>
-
 			<!-- 右侧操作面板区域 -->
 			<StackPane>
 				<padding>
 					<Insets top="10" right="10" bottom="10" left="10" />
 				</padding>
 
-				<!-- 村庄操作面板 -->
-				<VBox fx:id="villageOperationsPanel" spacing="10" styleClass="operations-panel" visible="true">
-					<Label text="村庄管理" styleClass="panel-title"/>
-					<Button text="添加村庄" onAction="#handleAddVillage" maxWidth="Infinity"/>
-					<Button text="编辑村庄" onAction="#handleEditVillage" maxWidth="Infinity"/>
-					<Button text="删除村庄" onAction="#handleDeleteVillage" maxWidth="Infinity"/>
-					<Separator/>
-					<Label text="村庄查询" styleClass="panel-title"/>
-					<HBox spacing="5">
-						<TextField fx:id="villageSearchField" promptText="输入村庄名称" HBox.hgrow="ALWAYS"/>
-						<Button text="查询" onAction="#handleSearchVillage"/>
-					</HBox>
-				</VBox>
-
-				<!-- 道路操作面板 -->
-				<VBox fx:id="roadOperationsPanel" spacing="10" styleClass="operations-panel" visible="false">
-					<Label text="道路管理" styleClass="panel-title"/>
-					<Button text="添加道路" onAction="#handleAddRoad" maxWidth="Infinity"/>
-					<Button text="编辑道路" onAction="#handleEditRoad" maxWidth="Infinity"/>
-					<Button text="删除道路" onAction="#handleDeleteRoad" maxWidth="Infinity"/>
-					<Separator/>
-					<Label text="道路查询" styleClass="panel-title"/>
-					<TextField fx:id="roadSearchField" promptText="输入起点或终点村庄"/>
-					<Button text="查询" onAction="#handleSearchRoad" maxWidth="Infinity"/>
-				</VBox>
-
 				<!-- 分析操作面板 -->
-				<VBox fx:id="analysisOperationsPanel" spacing="10" styleClass="operations-panel" visible="false">
-					<Label text="连通性检查" styleClass="panel-title"/>
-					<Button text="检查全图连通性" onAction="#checkConnectivity" maxWidth="Infinity"/>
-					<Button text="生成村村通方案" onAction="#generateMinimumSpanningTree" maxWidth="Infinity"/>
-					<Separator/>
-					<Label text="查看统计信息" styleClass="panel-title"/>
-					<Button text="显示村庄统计" onAction="#showVillageStatistics" maxWidth="Infinity"/>
-					<Button text="显示道路统计" onAction="#showRoadStatistics" maxWidth="Infinity"/>
-				</VBox>
-
-				<!-- 路径操作面板 -->
-				<VBox fx:id="routeOperationsPanel" spacing="10" styleClass="operations-panel" visible="false">
+				<VBox fx:id="analysisOperationsPanel" styleClass="operations-panel" spacing="15">
+					<Label text="输出结果" styleClass="panel-title"/>
+					<TextArea fx:id="connectivityResult" prefRowCount="8" editable="false" wrapText="true"/>
+					<Label text="连通性分析" styleClass="panel-title"/>
+					<Button text="检查村庄连通性" onAction="#checkConnectivity" />
+					<Label text="村村通方案" styleClass="panel-title"/>
+					<Button text="生成最小成本方案" onAction="#generateMinimumSpanningTree" />
 					<Label text="最短路径查询" styleClass="panel-title"/>
-					<Button text="两点间最短路径" onAction="#findShortestPath" maxWidth="Infinity"/>
-					<Separator/>
-					<Label text="优化路线生成" styleClass="panel-title"/>
-					<Button text="经过所有村庄最短路线" onAction="#generateOptimalRoute" maxWidth="Infinity"/>
-					<Button text="经过所有村庄并返回起点" onAction="#generateOptimalRoundTrip" maxWidth="Infinity"/>
-					<Separator/>
-					<Label text="起始村庄选择" styleClass="panel-title"/>
-					<ComboBox fx:id="startVillageCombo" promptText="选择起始村庄" maxWidth="Infinity"/>
+					<HBox spacing="10">
+						<Label text="起点村庄" minWidth="80" />
+						<ComboBox fx:id="startVillageCombo" />
+					</HBox>
+					<Button text="查询所有最短路径" onAction="#findAllShortestPaths" />
+					<TableView fx:id="shortestPathsTable" VBox.vgrow="ALWAYS">
+						<columns>
+							<TableColumn text="目标村庄" prefWidth="100">
+								<cellValueFactory><PropertyValueFactory property="targetVillage" /></cellValueFactory>
+							</TableColumn>
+							<TableColumn text="距离(km)" prefWidth="80">
+								<cellValueFactory><PropertyValueFactory property="distance" /></cellValueFactory>
+							</TableColumn>
+						</columns>
+					</TableView>
+
+					<Label text="最优路线规划" styleClass="panel-title"/>
+					<HBox spacing="10">
+						<Label text="起点村庄：" minWidth="80"/>
+						<ComboBox fx:id="routeStartVillageComboBox" />
+					</HBox>
+					<Button text="计算经过所有村庄的最短路径" onAction="#findOptimalRoute" />
+					<Button text="计算最短回环路径" onAction="#findOptimalRoundTrip" />
 				</VBox>
-			</StackPane>
+           			</StackPane>
 		</HBox>
 	</right>
 

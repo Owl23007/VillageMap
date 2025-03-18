@@ -1,16 +1,12 @@
 package cn.woyioii.controller;
 
-import cn.woyioii.dao.impl.RoadDaoImpl;
-import cn.woyioii.dao.impl.VillageDaoImpl;
 import cn.woyioii.handler.UIEventHandler;
 import cn.woyioii.handler.UIEventHandler.UIEventListener;
 import cn.woyioii.model.Road;
 import cn.woyioii.model.Village;
 import cn.woyioii.render.MapRenderer;
 import cn.woyioii.service.RoadService;
-import cn.woyioii.service.VillageService;  // 确保这个import存在
-import cn.woyioii.service.impl.RoadServiceImpl;
-import cn.woyioii.service.impl.VillageServiceImpl;
+import cn.woyioii.service.VillageService;
 import cn.woyioii.util.AlertUtils;
 import cn.woyioii.util.MapCalculator;
 import javafx.application.Platform;
@@ -20,17 +16,18 @@ import javafx.scene.control.*;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.File;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
+import java.util.Set;
 
 @Slf4j
 public class MainController implements UIEventListener {
     // 添加默认数据文件路径常量
-    private static final String DEFAULT_DATA_FILE = "data/villages.json";
+    private static final String DEFAULT_DATA_FILE = "data/default-villages.json";
     private static final int VILLAGE_SELECT_THRESHOLD = 20; // 村庄选择的像素阈值
 
     // FXML 组件
@@ -40,22 +37,13 @@ public class MainController implements UIEventListener {
     @FXML private Label statusLabel;
     @FXML private Label coordinatesLabel;
 
-    // 侧边栏按钮
-    @FXML private Button villageTabButton;
-    @FXML private Button roadTabButton;
-    @FXML private Button analysisTabButton;
-    @FXML private Button routeTabButton;
+    // FXML 右侧组件
+    public TextArea optimalRouteResult;
+    public TextArea connectivityResult;
+    public ComboBox routeStartVillageComboBox;
 
-    // 侧边栏面板
-    @FXML private VBox villageOperationsPanel;
-    @FXML private VBox roadOperationsPanel;
-    @FXML private VBox analysisOperationsPanel;
-    @FXML private VBox routeOperationsPanel;
-
-    // 搜索框
     @FXML private ComboBox<Village> startVillageCombo;
-    @FXML private TextField villageSearchField;
-    @FXML private TextField roadSearchField;
+
 
     // Services服务对象
     private VillageService villageService;
@@ -87,8 +75,6 @@ public class MainController implements UIEventListener {
         setupMap();
         // 更新状态
         updateStatus("等待数据加载...");
-        // 默认显示村庄面板
-        switchToVillageTab();
     }
 
     private void setupTables() {
@@ -152,15 +138,6 @@ public class MainController implements UIEventListener {
     }
 
     @FXML
-    public void onOpen() {
-        handleFileOperation("打开文件", () -> {
-            fileManager.loadData(currentFile, villageService, roadService);
-            calculateRoadLengths();
-            return "已加载文件";
-        });
-    }
-
-    @FXML
     public void onOpenVillage() {
         handleFileOperation("打开村庄文件", () -> {
             fileManager.loadVillageData(currentFile, villageService);
@@ -172,7 +149,7 @@ public class MainController implements UIEventListener {
     public void onOpenRoad() {
         handleFileOperation("打开道路文件", () -> {
             fileManager.loadRoadData(currentFile, roadService);
-            calculateRoadLengths();
+            calculateAllRoadLengths();
             return "已加载道路数据";
         });
     }
@@ -225,11 +202,9 @@ public class MainController implements UIEventListener {
                 onSave();
             }
         }
-
         Platform.exit();
     }
 
-    // Village operations
     @FXML
     public void handleAddVillage() {
         uiEventHandler.handleAddVillage();
@@ -246,22 +221,6 @@ public class MainController implements UIEventListener {
     }
 
     @FXML
-    public void handleSearchVillage() {
-        String searchTerm = villageSearchField.getText().trim().toLowerCase();
-        if (searchTerm.isEmpty()) {
-            refreshUI();
-            return;
-        }
-
-        List<Village> filteredVillages = villageService.getAllVillages().stream()
-                .filter(v -> v.getName().toLowerCase().contains(searchTerm))
-                .collect(Collectors.toList());
-
-        villageTable.getItems().setAll(filteredVillages);
-    }
-
-    // Road operations
-    @FXML
     public void handleAddRoad() {
         uiEventHandler.handleAddRoad();
     }
@@ -277,159 +236,142 @@ public class MainController implements UIEventListener {
     }
 
     @FXML
-    public void handleSearchRoad() {
-        String searchTerm = roadSearchField.getText().trim();
-        if (searchTerm.isEmpty()) {
-            refreshUI();
+    public void checkConnectivity() {
+        updateStatus("正在检查连通性...");
+
+        // 获取所有村庄和道路
+        List<Village> villages = villageService.getAllVillages();
+        List<Road> roads = roadService.getAllRoads();
+
+        if (villages.isEmpty()) {
+            AlertUtils.showWarning("连通性检查", "当前没有任何村庄");
             return;
         }
 
-        // Assuming search can be by name or village ID
-        List<Road> filteredRoads = roadService.getAllRoads().stream()
-                .filter(road -> {
-                    Village start = villageService.getVillageById(road.getStartId());
-                    Village end = villageService.getVillageById(road.getEndId());
-                    return road.getName().contains(searchTerm) ||
-                            (start != null && start.getName().contains(searchTerm)) ||
-                            (end != null && end.getName().contains(searchTerm));
-                })
-                .collect(Collectors.toList());
+        // 创建邻接矩阵
+        int n = villages.size();
+        double[][] adjacencyMatrix = new double[n][n];
 
-        roadTable.getItems().setAll(filteredRoads);
-    }
+        // 构建邻接矩阵
+        for (Road road : roads) {
+            int startIndex = getVillageIndex(villages, road.getStartId());
+            int endIndex = getVillageIndex(villages, road.getEndId());
 
-    // Tab switching
-    @FXML
-    public void switchToVillageTab() {
-        villageOperationsPanel.setVisible(true);
-        roadOperationsPanel.setVisible(false);
-        analysisOperationsPanel.setVisible(false);
-        routeOperationsPanel.setVisible(false);
+            if (startIndex != -1 && endIndex != -1) {
+                adjacencyMatrix[startIndex][endIndex] = road.getLength();
+                adjacencyMatrix[endIndex][startIndex] = road.getLength(); // 无向图
+            }
+        }
 
-        highlightButton(villageTabButton);
-    }
+        // 检查连通性
+        List<Set<Integer>> components = MapCalculator.checkConnectivity(adjacencyMatrix);
 
-    @FXML
-    public void switchToRoadTab() {
-        villageOperationsPanel.setVisible(false);
-        roadOperationsPanel.setVisible(true);
-        analysisOperationsPanel.setVisible(false);
-        routeOperationsPanel.setVisible(false);
-
-        highlightButton(roadTabButton);
-    }
-
-    @FXML
-    public void switchToAnalysisTab() {
-        villageOperationsPanel.setVisible(false);
-        roadOperationsPanel.setVisible(false);
-        analysisOperationsPanel.setVisible(true);
-        routeOperationsPanel.setVisible(false);
-
-        highlightButton(analysisTabButton);
-    }
-
-    @FXML
-    public void switchToRouteTab() {
-        villageOperationsPanel.setVisible(false);
-        roadOperationsPanel.setVisible(false);
-        analysisOperationsPanel.setVisible(false);
-        routeOperationsPanel.setVisible(true);
-
-        highlightButton(routeTabButton);
-    }
-
-    private void highlightButton(Button activeButton) {
-        villageTabButton.getStyleClass().remove("active-tab");
-        roadTabButton.getStyleClass().remove("active-tab");
-        analysisTabButton.getStyleClass().remove("active-tab");
-        routeTabButton.getStyleClass().remove("active-tab");
-
-        activeButton.getStyleClass().add("active-tab");
-    }
-
-    // Analysis operations
-    @FXML
-    public void checkConnectivity() {
-        // Implementation of connectivity check
-        updateStatus("正在检查连通性...");
-
-        // Example implementation placeholder
-        boolean isConnected = true; // This would come from actual analysis
-
-        if (isConnected) {
+        if (components.size() == 1) {
+            connectivityResult.setText("图中所有村庄均连通");
             AlertUtils.showInformation("连通性检查", "图中所有村庄均连通");
         } else {
-            AlertUtils.showWarning("连通性检查", "图中存在不连通的村庄");
+            // 构建未连通组的信息
+            StringBuilder message = new StringBuilder("存在以下未连通的村庄组：\n\n");
+            for (int i = 0; i < components.size(); i++) {
+                message.append("组 ").append(i + 1).append("：");
+                for (Integer index : components.get(i)) {
+                    Village v = villages.get(index);
+                    message.append(v.getName()).append("、");
+                }
+                message.setLength(message.length() - 1); // 移除最后的顿号
+                message.append("\n");
+            }
+            connectivityResult.setText(message.toString());
+            AlertUtils.showInformation("连通性检查", "图中存在未连通的村庄组", String.valueOf(message));
         }
+
+        updateStatus("连通性检查完成");
     }
 
+    // 辅助方法：根据村庄ID获取在列表中的索引
+    private int getVillageIndex(List<Village> villages, Integer id) {
+        for (int i = 0; i < villages.size(); i++) {
+            if (villages.get(i).getId() == id) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    // 最小生成树
     @FXML
     public void generateMinimumSpanningTree() {
-        // Implementation for MST generation
         updateStatus("正在生成最小生成树...");
 
-        // Example implementation placeholder
         AlertUtils.showInformation("村村通方案", "已生成村村通方案，共需修建X条道路");
     }
 
-    @FXML
-    public void showVillageStatistics() {
-        // Display village statistics
-        int totalVillages = villageService.getAllVillages().size();
-        AlertUtils.showInformation("村庄统计", "共有" + totalVillages + "个村庄");
-    }
-
-    @FXML
-    public void showRoadStatistics() {
-        // Display road statistics
-        int totalRoads = roadService.getAllRoads().size();
-        double totalLength = roadService.getAllRoads().stream().mapToDouble(Road::getLength).sum();
-
-        AlertUtils.showInformation("道路统计",
-                "共有" + totalRoads + "条道路\n" +
-                        "总长度: " + String.format("%.1f", totalLength) + "km");
-    }
-
-    // Route operations
+    // 两个村庄最短路径
     @FXML
     public void findShortestPath() {
-        // Implementation for shortest path finding
         updateStatus("正在计算最短路径...");
 
-        // Example implementation placeholder
         AlertUtils.showInformation("最短路径", "两点之间的最短路径已显示在地图上");
     }
 
+    // 最短经过所有村庄的路径
     @FXML
     public void generateOptimalRoute() {
-        // Implementation for TSP
         updateStatus("正在生成最优路线...");
 
-        // Example implementation placeholder
         AlertUtils.showInformation("最优路线", "已生成经过所有村庄的最短路线");
     }
 
     @FXML
-    public void generateOptimalRoundTrip() {
-        // Implementation for TSP with return to start
-        updateStatus("正在生成最优环路...");
+    private void findAllShortestPaths() {
+        //todo
+        updateStatus("正在计算所有最短路径...");
 
-        // Example implementation placeholder
-        AlertUtils.showInformation("最优环路", "已生成经过所有村庄并返回起点的最短路线");
     }
 
-    // Event handlers for selections and interactions
+    // 辅助方法：获取村庄在列表中的索引
+    private int getVillageIndex(int id, List<Village> villages) {
+        for (int i = 0; i < villages.size(); i++) {
+            if (villages.get(i).getId() == id) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    // 路径结果的数据类
+    @Getter
+    public static class PathResult {
+        private final String targetVillage;
+        private final double distance;
+
+        public PathResult(String targetVillage, double distance) {
+            this.targetVillage = targetVillage;
+            this.distance = distance;
+        }
+
+    }
+
+    @FXML
+    public void findOptimalRoute() {
+        //todo
+    }
+
+    @FXML
+    public void findOptimalRoundTrip() {
+     //todo
+    }
+
+    // 点击村庄时的逻辑
     private void handleVillageSelection(Village village) {
         if (village != null) {
-            // Handle village selection (e.g., highlight on map)
             mapRenderer.highlightVillage(village);
         }
     }
 
+    // 点击道路时的逻辑
     private void handleRoadSelection(Road road) {
         if (road != null) {
-            // Handle road selection (e.g., highlight on map)
             Village start = villageService.getVillageById(road.getStartId());
             Village end = villageService.getVillageById(road.getEndId());
             if (start != null && end != null) {
@@ -438,19 +380,19 @@ public class MainController implements UIEventListener {
         }
     }
 
+    // 鼠标移动时的逻辑
     private void handleMouseMoved(MouseEvent event) {
-        // Update coordinates label
         int x = (int) event.getX();
         int y = (int) event.getY();
         coordinatesLabel.setText("坐标: " + x + "," + y);
     }
 
+    // 点击地图时的逻辑
     private void handleMapClick(MouseEvent event) {
-        // Handle map clicks (e.g., select closest village)
+
         double x = event.getX();
         double y = event.getY();
 
-        // Find closest village and select it
         Village closest = findClosestVillage(x, y);
         if (closest != null) {
             villageTable.getSelectionModel().select(closest);
@@ -458,8 +400,8 @@ public class MainController implements UIEventListener {
         }
     }
 
+    // 查找最近的村庄
     private Village findClosestVillage(double x, double y) {
-        // Find the village closest to the given coordinates
         Village closest = null;
         double minDistance = Double.MAX_VALUE;
 
@@ -468,12 +410,11 @@ public class MainController implements UIEventListener {
                     Math.pow(v.getLocateX() - x, 2) +
                             Math.pow(v.getLocateY() - y, 2));
 
-            if (distance < minDistance && distance < VILLAGE_SELECT_THRESHOLD) { // 20 pixel threshold
+            if (distance < minDistance && distance < VILLAGE_SELECT_THRESHOLD) {
                 minDistance = distance;
                 closest = v;
             }
         }
-
         return closest;
     }
 
@@ -491,20 +432,18 @@ public class MainController implements UIEventListener {
     }
 
     public void refreshUI() {
-        // Update tables
+        // 更新表格数据
         villageTable.getItems().setAll(villageService.getAllVillages());
         roadTable.getItems().setAll(roadService.getAllRoads());
 
-        // Update combo boxes
+        // 更新下拉框
         startVillageCombo.getItems().setAll(villageService.getAllVillages());
 
-        // Redraw map
+        // 更新地图
         mapRenderer.redraw(villageService.getAllVillages(), roadService.getAllRoads(), villageService);
     }
 
-    /**
-     * 更新界面状态，确保在JavaFX应用程序线程中执行
-     */
+    // 更新状态信息
     private void updateStatus(String message) {
         if (Platform.isFxApplicationThread()) {
             statusLabel.setText(message);
@@ -524,7 +463,7 @@ public class MainController implements UIEventListener {
         log.info("服务初始化完成");
     }
 
-    // 设置
+    // 设置舞台
     public void setStage(Stage stage) {
         stage.setOnCloseRequest(event -> {
             if (dataModified) {
@@ -547,23 +486,19 @@ public class MainController implements UIEventListener {
         }
     }
 
-    /**
-     * 验证服务是否正确初始化
-     */
+   // 验证服务是否已初始化
     private void validateServices() {
         if (villageService == null || roadService == null) {
             throw new IllegalStateException("服务未初始化");
         }
     }
 
-    /**
-     * 加载初始数据
-     */
+    // 加载初始数据
     private void loadInitialData() {
         currentFile = new File(DEFAULT_DATA_FILE);
         if (currentFile.exists()) {
             if (loadExistingData()) {
-                calculateRoadLengths();
+                calculateAllRoadLengths();
                 refreshUI();
                 updateStatus("初始数据加载完成");
             }
@@ -572,43 +507,38 @@ public class MainController implements UIEventListener {
         }
     }
 
-    /**
-     * 加载已存在的数据文件
-     */
+    // 加载现有数据
     private boolean loadExistingData() {
         return fileManager.loadData(currentFile, villageService, roadService);
     }
 
-    /**
-     * 创建新的数据文件
-     */
+    // 创建新数据
     private void createNewData() {
         fileManager.createNewData(villageService, roadService);
         updateStatus("未找到默认数据文件，已创建新数据");
     }
 
-    /**
-     * 处理初始化错误
-     */
+    // 处理初始化错误
     private void handleInitializationError(Exception e) {
         log.error("初始化界面数据失败", e);
         AlertUtils.showException("初始化失败", "无法加载初始数据", e);
     }
 
-    // 添加新方法用于计算道路长度
-    private void calculateRoadLengths() {
+    // 计算所有道路长度
+    private void calculateAllRoadLengths() {
         List<Road> roads = roadService.getAllRoads();
         for (Road road : roads) {
             Village start = villageService.getVillageById(road.getStartId());
             Village end = villageService.getVillageById(road.getEndId());
             if (start != null && end != null) {
+                // 计算距离
                 double length = MapCalculator.calculateDistance(start, end);
                 road.setLength(length);
             }
         }
     }
 
-    // 添加新的私有方法来处理文件操作
+    // 处理文件操作
     private void handleFileOperation(String operationType, FileOperation operation) {
         if (checkUnsavedChanges()) {
             Optional<File> fileOpt = fileManager.showOpenDialog(mapCanvas.getScene().getWindow());
@@ -635,8 +565,9 @@ public class MainController implements UIEventListener {
         boolean shouldSave = AlertUtils.showConfirmation("保存更改", "数据已修改，是否保存？");
         if (shouldSave) {
             onSave();
+            return true;
         }
-        return true;
+        return false;
     }
 
     // 文件操作接口

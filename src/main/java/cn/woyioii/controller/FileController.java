@@ -17,8 +17,8 @@ public class FileController {
     private final FileChooser fileChooser;
 
     // 文件后缀常量
-    private static final String VILLAGE_SUFFIX = "-village.json";
-    private static final String ROAD_SUFFIX = "-road.json";
+    private static final String VILLAGE_SUFFIX = "-villages.json";
+    private static final String ROAD_SUFFIX = "-roads.json";
 
     public FileController() {
         this.fileChooser = new FileChooser();
@@ -121,10 +121,20 @@ public class FileController {
     }
 
     private File findMatchingFile(String basePath, String prefix) {
-        File file = new File(basePath, prefix + ".json");
-        if (file.exists()) {
-            return file;
-        }
+        // 移除已有的.json后缀
+        prefix = prefix.replace(".json", "");
+        
+        // 尝试查找对应类型的文件
+        File villageFile = new File(basePath, prefix + VILLAGE_SUFFIX);
+        File roadFile = new File(basePath, prefix + ROAD_SUFFIX);
+        
+        if (villageFile.exists()) return villageFile;
+        if (roadFile.exists()) return roadFile;
+        
+        // 尝试查找旧格式的文件
+        File legacyFile = new File(basePath, prefix + ".json");
+        if (legacyFile.exists()) return legacyFile;
+        
         return null;
     }
 
@@ -132,7 +142,11 @@ public class FileController {
     public boolean saveData(File baseFile, VillageService villageService, RoadService roadService) {
         try {
             String basePath = baseFile.getParent();
-            String baseName = baseFile.getName().replace(".json", "");
+
+            String baseName = baseFile.getName()
+                                   .replace(".json", "")
+                                   .replace("-villages", "")
+                                   .replace("-roads", "");
             
             // 确保目标目录存在
             File directory = new File(basePath);
@@ -140,7 +154,7 @@ public class FileController {
                 throw new IOException("无法创建目标目录: " + basePath);
             }
             
-            // 保存村庄数据
+            // 使用新的后缀格式创建文件
             File villageFile = new File(basePath, baseName + VILLAGE_SUFFIX);
             villageService.getVillageDao().saveVillage(
                 villageService.getAllVillages(), 
@@ -164,12 +178,11 @@ public class FileController {
     }
 
     // 单独加载村庄数据
-    public boolean loadVillageData(File file, VillageService villageService) {
+    public void loadVillageData(File file, VillageService villageService) {
         try {
             villageService.getVillageDao().setFilePath(file.getAbsolutePath());
             villageService.reloadVillages();
             log.info("村庄数据加载成功: {}", file);
-            return true;
         } catch (Exception e) {
             log.error("加载村庄数据失败: {}", e.getMessage(), e);
             throw new RuntimeException("加载村庄数据失败: " + e.getMessage(), e);
@@ -177,12 +190,11 @@ public class FileController {
     }
 
     // 单独加载道路数据
-    public boolean loadRoadData(File file, RoadService roadService) {
+    public void loadRoadData(File file, RoadService roadService) {
         try {
             roadService.getRoadDao().setFilePath(file.getAbsolutePath());
             roadService.reloadRoads();
             log.info("道路数据加载成功: {}", file);
-            return true;
         } catch (Exception e) {
             log.error("加载道路数据失败: {}", e.getMessage(), e);
             throw new RuntimeException("加载道路数据失败: " + e.getMessage(), e);

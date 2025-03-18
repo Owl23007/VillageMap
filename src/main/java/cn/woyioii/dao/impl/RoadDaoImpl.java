@@ -22,7 +22,7 @@ public class RoadDaoImpl implements RoadDao {
     private final Gson gson = new Gson();
 
     public RoadDaoImpl() {
-        this.filePath = "data/roads.json";
+        this.filePath = "data/default-roads.json";
         initializeFile(); // 确保文件存在
     }
 

@@ -115,10 +115,6 @@ public class UIEventHandler {
         }
     }
 
-    public void handleCalculateShortestPath() {
-        //todo
-    }
-
     public void handleEditVillage() {
         Village selectedVillage = listener.getSelectedVillage();
         if (selectedVillage == null) {

@@ -18,12 +18,11 @@ import cn.woyioii.dao.VillageDao;
 
 public class VillageDaoImpl implements VillageDao {
     private String filePath;
-    private final Gson gson;
+    private final Gson gson =new Gson();
 
     public VillageDaoImpl() {
-        // 初始化,默认文件路径为data/villages.json
-        this.filePath = "data/villages.json";
-        this.gson = new GsonBuilder().create();
+        // 初始化,默认文件路径
+        this.filePath = "data/default-villages.json";
         initializeFile(); // 确保文件存在
     }
 
