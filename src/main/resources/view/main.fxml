@@ -160,10 +160,13 @@
 				<VBox styleClass="operations-panel" spacing="15">
 					<Label text="输出结果" styleClass="panel-title"/>
 					<TextArea fx:id="textAreaResult" prefRowCount="8" editable="false" wrapText="true"/>
+
 					<Label text="连通性分析" styleClass="panel-title"/>
 					<Button text="检查村庄连通性" onAction="#checkConnectivity" />
+
 					<Label text="村村通方案" styleClass="panel-title"/>
 					<Button text="生成最小成本方案" onAction="#generateMinimumSpanningTree" />
+
 					<Label text="最短路径查询" styleClass="panel-title"/>
 					<HBox spacing="10">
 						<Label text="起点村庄" minWidth="80" />
@@ -173,10 +176,19 @@
 					<TableView fx:id="shortestPathsTable" VBox.vgrow="ALWAYS">
 						<columns>
 							<TableColumn text="目标村庄" prefWidth="100">
-								<cellValueFactory><PropertyValueFactory property="targetVillage" /></cellValueFactory>
+								<cellValueFactory>
+									<PropertyValueFactory property="targetVillage" />
+								</cellValueFactory>
 							</TableColumn>
 							<TableColumn text="距离(km)" prefWidth="80">
-								<cellValueFactory><PropertyValueFactory property="distance" /></cellValueFactory>
+								<cellValueFactory>
+									<PropertyValueFactory property="distanceDisplay" />
+								</cellValueFactory>
+							</TableColumn>
+							<TableColumn text="路径" prefWidth="200">
+								<cellValueFactory>
+									<PropertyValueFactory property="pathInfo" />
+								</cellValueFactory>
 							</TableColumn>
 						</columns>
 					</TableView>

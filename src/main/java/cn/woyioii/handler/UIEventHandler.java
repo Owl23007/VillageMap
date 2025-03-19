@@ -142,6 +142,7 @@ public class UIEventHandler {
 
         Optional<Road> result = showRoadDialog(selectedRoad, "编辑道路", "修改道路信息", "保存");
         result.ifPresent(road -> {
+            road.setLength(MapCalculator.calculateDistance(villageService.getVillageById(road.getStartId()), villageService.getVillageById(road.getEndId())));
             if (roadService.updateRoad(road)) {
                 notifyDataChanged();
                 AlertUtils.showInformation("更新成功", "道路信息已更新");
@@ -306,12 +307,6 @@ public class UIEventHandler {
         grid.add(endVillageCombo, 1, row++);
         grid.add(new Label("道路名称:"), 0, row);
         grid.add(nameField, 1, row++);
-
-        // 添加长度字段（编辑时显示，新增时自动计算）
-        if (road != null) {
-            grid.add(new Label("长度(km):"), 0, row);
-            grid.add(lengthField, 1, row);
-        }
 
         dialog.getDialogPane().setContent(grid);
 

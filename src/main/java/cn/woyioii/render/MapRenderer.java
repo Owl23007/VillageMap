@@ -43,7 +43,7 @@ public class MapRenderer {
 
     // 状态相关字段
     @Setter private Village selectedVillage;    // 当前选中的村庄
-    @Setter private Road hoveredRoad;          // 当前悬停的道路
+    @Setter private Road selectedRoad;          // 当前选中的道路
     private List<Road> highlightedPath = new ArrayList<>();  // 高亮显示的路径
 
     // 颜色配置
@@ -80,23 +80,12 @@ public class MapRenderer {
         });
     }
 
-    public void drawRoads(List<Road> roads, VillageService villageService) {
+    public void drawRoads(List<Road> roads) {
         roads.forEach(road -> {
             // 判断是否为高亮路径的一部分
             boolean isHighlighted = highlightedPath.contains(road);
-            drawRoad(road, villageService, isHighlighted);
+            drawRoad(road, isHighlighted);
         });
-    }
-
-    // 高亮显示一条路径（一系列相连的道路）
-    public void highlightPath(List<Road> path) {
-        this.highlightedPath = new ArrayList<>(path);
-    }
-
-    // 清除所有高亮和选择
-    public void clearSelection() {
-        this.selectedVillage = null;
-        this.highlightedPath.clear();
     }
 
     /**
@@ -206,9 +195,9 @@ public class MapRenderer {
      * 绘制道路连接
      * 支持高亮显示和悬停效果
      */
-    private void drawRoad(Road road, VillageService villageService, boolean highlighted) {
-        Village start = villageService.getVillageById(road.getStartId());
-        Village end = villageService.getVillageById(road.getEndId());
+    private void drawRoad(Road road , boolean highlighted) {
+        Village start = lastVillageService.getVillageById(road.getStartId());
+        Village end = lastVillageService.getVillageById(road.getEndId());
 
         if (start != null && end != null) {
             double x1 = start.getLocateX();
@@ -218,12 +207,12 @@ public class MapRenderer {
 
             // 设置道路样式
             Color currentColor;
-            if (highlighted) {
-                currentColor = pathColor;
-                gc.setLineWidth(3);
-            } else if (road.equals(hoveredRoad)) {
+            if (road.equals(selectedRoad)) {
                 currentColor = hoveredRoadColor;
                 gc.setLineWidth(2.5);
+            } else if ( highlighted ) {
+                currentColor = pathColor;
+                gc.setLineWidth(3);
             } else {
                 currentColor = roadColor;
                 gc.setLineWidth(1.5);
@@ -277,7 +266,7 @@ public class MapRenderer {
             if (highlighted) {
                 gc.setFill(Color.rgb(0, 120, 0));  // 深绿色文字
                 gc.setFont(javafx.scene.text.Font.font(13));  // 稍微加大字号
-            } else if (road.equals(hoveredRoad)) {
+            } else if (road.equals(selectedRoad)) {
                 gc.setFill(Color.rgb(200, 100, 0));  // 深橙色文字
             } else {
                 gc.setFill(Color.BLACK);
@@ -302,7 +291,7 @@ public class MapRenderer {
         // 执行实际的重绘操作
         clear();
         drawGrid();  // 先绘制网格
-        drawRoads(roads, villageService);
+        drawRoads(roads);
         drawVillages(villages);
     }
 
@@ -312,12 +301,10 @@ public class MapRenderer {
         // 立即重绘地图以显示选中效果
         redraw(List.copyOf(getLastVillages()), List.copyOf(getLastRoads()), getLastVillageService());
     }
-    
-    // 高亮指定的道路
-    public void highlightRoad(Road road, Village start, Village end) {
-        // 更新悬停的道路
-        this.hoveredRoad = road;
-        
+
+    public void highlightRoad(Road road) {
+        // 更新选中的道路
+        this.selectedRoad = road;
         // 立即重绘地图以显示高亮效果
         redraw(List.copyOf(getLastVillages()), List.copyOf(getLastRoads()), getLastVillageService());
     }
@@ -353,7 +340,7 @@ public class MapRenderer {
                 path.add(road);
             }
         }
-        highlightPath(path);
-        redraw(villages, path, lastVillageService);
+       this.highlightedPath = path;
+        drawRoads(path);
     }
 }

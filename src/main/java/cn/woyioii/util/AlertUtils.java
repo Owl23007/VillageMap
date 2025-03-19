@@ -35,16 +35,13 @@ public class AlertUtils {
             alert.showAndWait();
         });
     }
-    
+
     /**
-     * showInformation 方法的别名，保持向后兼容
+     * showInfo 方法的别名，保持向后兼容
      * @param title 标题
+     * @param context (可选)消息内容
      * @param message 消息内容
      */
-    public static void showInformation(String title, String message) {
-        showInfo(title, message);
-    }
-
     public static void showInformation(String title, String context, String message) {
         Platform.runLater(() -> {
             Alert alert = new Alert(Alert.AlertType.ERROR);
@@ -52,22 +49,31 @@ public class AlertUtils {
             alert.setHeaderText(null);
             alert.setContentText(context);
 
-            TextArea textArea = new TextArea(message);
-            textArea.setEditable(false);
-            textArea.setWrapText(true);
-
-            textArea.setMaxWidth(Double.MAX_VALUE);
-            textArea.setMaxHeight(Double.MAX_VALUE);
-            GridPane.setVgrow(textArea, Priority.ALWAYS);
-            GridPane.setHgrow(textArea, Priority.ALWAYS);
-
-            GridPane expContent = new GridPane();
-            expContent.setMaxWidth(Double.MAX_VALUE);
-            expContent.add(textArea, 0, 0);
-
-            alert.getDialogPane().setExpandableContent(expContent);
-            alert.showAndWait();
+            setAlertShow(message, alert);
         });
+    }
+
+    public static void showInformation(String title, String message) {
+        showInfo(title, message);
+    }
+
+    // 设置警告框展示
+    private static void setAlertShow(String message, Alert alert) {
+        TextArea textArea = new TextArea(message);
+        textArea.setEditable(false);
+        textArea.setWrapText(true);
+
+        textArea.setMaxWidth(Double.MAX_VALUE);
+        textArea.setMaxHeight(Double.MAX_VALUE);
+        GridPane.setVgrow(textArea, Priority.ALWAYS);
+        GridPane.setHgrow(textArea, Priority.ALWAYS);
+
+        GridPane expContent = new GridPane();
+        expContent.setMaxWidth(Double.MAX_VALUE);
+        expContent.add(textArea, 0, 0);
+
+        alert.getDialogPane().setExpandableContent(expContent);
+        alert.showAndWait();
     }
 
     /**
@@ -122,21 +128,7 @@ public class AlertUtils {
             exception.printStackTrace(pw);
             String exceptionText = sw.toString();
 
-            TextArea textArea = new TextArea(exceptionText);
-            textArea.setEditable(false);
-            textArea.setWrapText(true);
-
-            textArea.setMaxWidth(Double.MAX_VALUE);
-            textArea.setMaxHeight(Double.MAX_VALUE);
-            GridPane.setVgrow(textArea, Priority.ALWAYS);
-            GridPane.setHgrow(textArea, Priority.ALWAYS);
-
-            GridPane expContent = new GridPane();
-            expContent.setMaxWidth(Double.MAX_VALUE);
-            expContent.add(textArea, 0, 0);
-
-            alert.getDialogPane().setExpandableContent(expContent);
-            alert.showAndWait();
+            setAlertShow(exceptionText, alert);
         });
     }
 
