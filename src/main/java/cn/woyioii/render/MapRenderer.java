@@ -334,4 +334,26 @@ public class MapRenderer {
     private VillageService getLastVillageService() {
         return lastVillageService;
     }
+
+    // 高亮一组道路
+    public void highlightRoads(List<Village> villages, List<int[]> mstEdges) {
+        // 高亮显示MST的所有边
+        List<Road> path = new ArrayList<>();
+
+        int index = 0;
+        for (int[] edge : mstEdges) {
+            int startId = edge[0];
+            int endId = edge[1];
+            Village start = villages.stream().filter(v -> v.getId() == startId).findFirst().orElse(null);
+            Village end = villages.stream().filter(v -> v.getId() == endId).findFirst().orElse(null);
+            if (start != null && end != null) {
+                index++;
+                String temp = "MST-" + index;
+                Road road = new Road(start.getId(), end.getId(),temp);
+                path.add(road);
+            }
+        }
+        highlightPath(path);
+        redraw(villages, path, lastVillageService);
+    }
 }

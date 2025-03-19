@@ -157,9 +157,9 @@
 				</padding>
 
 				<!-- 分析操作面板 -->
-				<VBox fx:id="analysisOperationsPanel" styleClass="operations-panel" spacing="15">
+				<VBox styleClass="operations-panel" spacing="15">
 					<Label text="输出结果" styleClass="panel-title"/>
-					<TextArea fx:id="connectivityResult" prefRowCount="8" editable="false" wrapText="true"/>
+					<TextArea fx:id="textAreaResult" prefRowCount="8" editable="false" wrapText="true"/>
 					<Label text="连通性分析" styleClass="panel-title"/>
 					<Button text="检查村庄连通性" onAction="#checkConnectivity" />
 					<Label text="村村通方案" styleClass="panel-title"/>

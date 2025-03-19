@@ -14,7 +14,6 @@ import javafx.fxml.FXML;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.control.*;
 import javafx.scene.input.MouseEvent;
-import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -26,7 +25,7 @@ import java.util.Set;
 
 @Slf4j
 public class MainController implements UIEventListener {
-    // 添加默认数据文件路径常量
+    // 默认数据文件路径常量
     private static final String DEFAULT_DATA_FILE = "data/default-villages.json";
     private static final int VILLAGE_SELECT_THRESHOLD = 20; // 村庄选择的像素阈值
 
@@ -38,8 +37,7 @@ public class MainController implements UIEventListener {
     @FXML private Label coordinatesLabel;
 
     // FXML 右侧组件
-    public TextArea optimalRouteResult;
-    public TextArea connectivityResult;
+    public TextArea textAreaResult;
     public ComboBox routeStartVillageComboBox;
 
     @FXML private ComboBox<Village> startVillageCombo;
@@ -77,6 +75,7 @@ public class MainController implements UIEventListener {
         updateStatus("等待数据加载...");
     }
 
+    // 设置表格
     private void setupTables() {
         // 设置表格列
         villageTable.getSelectionModel().selectedItemProperty().addListener(
@@ -108,7 +107,7 @@ public class MainController implements UIEventListener {
         });
     }
 
-    //
+    // 设置地图
     private void setupMap() {
 
         mapCanvas.setOnMouseMoved(this::handleMouseMoved);
@@ -248,26 +247,15 @@ public class MainController implements UIEventListener {
             return;
         }
 
-        // 创建邻接矩阵
-        int n = villages.size();
-        double[][] adjacencyMatrix = new double[n][n];
-
         // 构建邻接矩阵
-        for (Road road : roads) {
-            int startIndex = getVillageIndex(villages, road.getStartId());
-            int endIndex = getVillageIndex(villages, road.getEndId());
-
-            if (startIndex != -1 && endIndex != -1) {
-                adjacencyMatrix[startIndex][endIndex] = road.getLength();
-                adjacencyMatrix[endIndex][startIndex] = road.getLength(); // 无向图
-            }
-        }
+        double[][] adjacencyMatrix = dataToAdjacencyMatrix (villages, roads);
 
         // 检查连通性
         List<Set<Integer>> components = MapCalculator.checkConnectivity(adjacencyMatrix);
 
         if (components.size() == 1) {
-            connectivityResult.setText("图中所有村庄均连通");
+            String current = textAreaResult.getText();
+            textAreaResult.setText(current+"\n"+"当前图中所有村庄均连通");
             AlertUtils.showInformation("连通性检查", "图中所有村庄均连通");
         } else {
             // 构建未连通组的信息
@@ -281,7 +269,8 @@ public class MainController implements UIEventListener {
                 message.setLength(message.length() - 1); // 移除最后的顿号
                 message.append("\n");
             }
-            connectivityResult.setText(message.toString());
+            String current = textAreaResult.getText();
+            textAreaResult.setText(current+"\n"+message);
             AlertUtils.showInformation("连通性检查", "图中存在未连通的村庄组", String.valueOf(message));
         }
 
@@ -303,7 +292,47 @@ public class MainController implements UIEventListener {
     public void generateMinimumSpanningTree() {
         updateStatus("正在生成最小生成树...");
 
+        // 获取所有村庄和道路
+        List<Village> villages = villageService.getAllVillages();
+        List<Road> roads = roadService.getAllRoads();
+
+        double[][] adjacencyMatrix = dataToAdjacencyMatrix (villages, roads);
+
+        // 检查连通性
+        List<Set<Integer>> components = MapCalculator.checkConnectivity(adjacencyMatrix);
+
+        if (components.size() == 1) {
+            String current = textAreaResult.getText();
+            textAreaResult.setText(current+"\n"+"当前图中所有村庄均连通");
+            AlertUtils.showInformation("连通性检查", "图中所有村庄均连通, 无需修建道路");
+            // 生成最小生成树
+            List<int[]> mstEdges = MapCalculator.generateMinimumSpanningTree(adjacencyMatrix);
+            current = textAreaResult.getText();
+            textAreaResult.setText(current+"\n"+"最小生成树为："+mstEdges);
+            // 在地图上显示最小生成树
+            mapRenderer.highlightRoads(villages, mstEdges);
+        }
+
         AlertUtils.showInformation("村村通方案", "已生成村村通方案，共需修建X条道路");
+    }
+
+    // Data 转邻接矩阵
+    public double[][] dataToAdjacencyMatrix(List<Village> villages, List<Road> roads) {
+        // 创建邻接矩阵
+        int n = villages.size();
+        double[][] adjacencyMatrix = new double[n][n];
+
+        // 构建邻接矩阵
+        for (Road road : roads) {
+            int startIndex = getVillageIndex(villages, road.getStartId());
+            int endIndex = getVillageIndex(villages, road.getEndId());
+
+            if (startIndex != -1 && endIndex != -1) {
+                adjacencyMatrix[startIndex][endIndex] = road.getLength();
+                adjacencyMatrix[endIndex][startIndex] = road.getLength();
+            }
+        }
+        return adjacencyMatrix;
     }
 
     // 两个村庄最短路径

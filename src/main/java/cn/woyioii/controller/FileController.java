@@ -83,7 +83,7 @@ public class FileController {
             String baseName = baseFile.getName().replace(".json", "");
             
             // 首先加载村庄数据
-            File villageFile = findMatchingFile(basePath, baseName + "-village");
+            File villageFile = findMatchingFile(basePath, baseName + "-villages");
             if (villageFile == null || !villageFile.exists()) {
                 villageFile = baseFile; // 如果没有专门的村庄文件，使用基础文件
             }
@@ -97,7 +97,7 @@ public class FileController {
             villageService.reloadVillages();
             
             // 加载道路数据
-            File roadFile = findMatchingFile(basePath, baseName + "-road");
+            File roadFile = findMatchingFile(basePath, baseName + "-roads");
             if (roadFile != null && roadFile.exists()) {
                 roadService.getRoadDao().setFilePath(roadFile.getAbsolutePath());
                 roadService.reloadRoads();

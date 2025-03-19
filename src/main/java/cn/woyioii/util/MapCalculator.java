@@ -35,13 +35,12 @@ public class MapCalculator {
      */
     public static List<Set<Integer>> checkConnectivity(double[][] adjacencyMatrix) {
         int n = adjacencyMatrix.length;
-        DisjointSet ds = new DisjointSet(n);
-        
-        // 使用并查集检查连通性
+        DisjointSet ds = new DisjointSet(n);// 未连通的点集合
+        // 检查连通性
         for (int i = 0; i < n; i++) {
             for (int j = i + 1; j < n; j++) {
                 if (adjacencyMatrix[i][j] > 0) {
-                    ds.union(i, j);
+                    ds.union(i, j);// 连通,合并两个集合
                 }
             }
         }
@@ -49,23 +48,23 @@ public class MapCalculator {
         // 获取所有连通分量
         Map<Integer, Set<Integer>> components = new HashMap<>();
         for (int i = 0; i < n; i++) {
-            int root = ds.find(i);
-            components.computeIfAbsent(root, k -> new HashSet<>()).add(i);
+            int root = ds.find(i); // 查找根节点
+            components.computeIfAbsent(root, k -> new HashSet<>()).add(i);// 添加到对应的连通分量
         }
         
         return new ArrayList<>(components.values());
     }
 
     /**
-     * 生成最小生成树（Kruskal算法）
+     * 生成最小生成树（普利姆算法）
      * @param adjacencyMatrix 邻接矩阵
      * @return 最小生成树的边集合，每个边用int[]{from, to}表示
      */
     public static List<int[]> generateMinimumSpanningTree(double[][] adjacencyMatrix) {
         int n = adjacencyMatrix.length;
         List<Edge> edges = new ArrayList<>();
-        
-        // 收集所有边
+
+        // 生成边集合
         for (int i = 0; i < n; i++) {
             for (int j = i + 1; j < n; j++) {
                 if (adjacencyMatrix[i][j] > 0) {
@@ -73,21 +72,29 @@ public class MapCalculator {
                 }
             }
         }
-        
-        // 按权重排序
-        edges.sort(Comparator.comparingDouble(e -> e.weight));
-        
-        // Kruskal算法
-        DisjointSet ds = new DisjointSet(n);
+
+        // 按权重排序(使用插入排序)
+        for (int i = 1; i < edges.size(); i++) {
+            Edge key = edges.get(i);
+            int j = i - 1;
+            while (j >= 0 && edges.get(j).weight > key.weight) {
+                edges.set(j + 1, edges.get(j));
+                j--;
+            }
+            edges.set(j + 1, key);
+        }
+
+
+        // 普利姆算法
         List<int[]> mst = new ArrayList<>();
-        
+        DisjointSet ds = new DisjointSet(n);// 未连通的点集合
         for (Edge edge : edges) {
             if (ds.find(edge.from) != ds.find(edge.to)) {
-                ds.union(edge.from, edge.to);
                 mst.add(new int[]{edge.from, edge.to});
+                ds.union(edge.from, edge.to);
             }
         }
-        
+
         return mst;
     }
 
@@ -159,7 +166,8 @@ public class MapCalculator {
     private static class DisjointSet {
         private final int[] parent;
         private final int[] rank;
-        
+
+        // 初始化并查集
         DisjointSet(int n) {
             parent = new int[n];
             rank = new int[n];
@@ -167,14 +175,16 @@ public class MapCalculator {
                 parent[i] = i;
             }
         }
-        
+
+        // 查找根节点
         int find(int x) {
             if (parent[x] != x) {
                 parent[x] = find(parent[x]); // 路径压缩
             }
             return parent[x];
         }
-        
+
+        // 合并两个集合
         void union(int x, int y) {
             int rootX = find(x);
             int rootY = find(y);
