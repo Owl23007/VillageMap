@@ -94,7 +94,6 @@ public class MapCalculator {
                 ds.union(edge.from, edge.to);
             }
         }
-
         return mst;
     }
 

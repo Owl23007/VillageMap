@@ -307,6 +307,7 @@ public class MainController implements UIEventListener {
             AlertUtils.showInformation("连通性检查", "图中所有村庄均连通, 无需修建道路");
             // 生成最小生成树
             List<int[]> mstEdges = MapCalculator.generateMinimumSpanningTree(adjacencyMatrix);
+            log.info("mstEdges: {}", mstEdges);
             current = textAreaResult.getText();
             textAreaResult.setText(current+"\n"+"最小生成树为："+mstEdges);
             // 在地图上显示最小生成树
