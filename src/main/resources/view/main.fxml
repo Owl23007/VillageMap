@@ -76,7 +76,7 @@
 										<PropertyValueFactory property="locateY" />
 									</cellValueFactory>
 								</TableColumn>
-								<TableColumn prefWidth="270" text="简介">
+								<TableColumn prefWidth="200" text="简介">
 									<cellValueFactory>
 										<PropertyValueFactory property="description" />
 									</cellValueFactory>
@@ -149,7 +149,7 @@
 	</center>
 	<!-- 右侧信息面板 -->
 	<right>
-		<HBox spacing="5" prefWidth="350">
+		<HBox spacing="5" prefWidth="400">
 			<!-- 右侧操作面板区域 -->
 			<StackPane>
 				<padding>
@@ -185,7 +185,7 @@
 									<PropertyValueFactory property="distanceDisplay" />
 								</cellValueFactory>
 							</TableColumn>
-							<TableColumn text="路径" prefWidth="200">
+							<TableColumn text="路径" prefWidth="500" style="-fx-alignment: CENTER-LEFT;">
 								<cellValueFactory>
 									<PropertyValueFactory property="pathInfo" />
 								</cellValueFactory>

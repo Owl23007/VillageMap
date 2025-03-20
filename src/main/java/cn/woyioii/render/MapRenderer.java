@@ -343,4 +343,41 @@ public class MapRenderer {
        this.highlightedPath = path;
         drawRoads(path);
     }
+
+    public void highlightPath(List<Village> pathVillages) {
+        // 清除现有高亮
+        redraw(lastVillages, lastRoads, lastVillageService);
+        
+        if (pathVillages == null || pathVillages.size() < 2) {
+            return;
+        }
+
+        GraphicsContext gc = canvas.getGraphicsContext2D();
+        gc.setStroke(Color.RED);
+        gc.setLineWidth(3);
+        
+        // 绘制路径线段
+        for (int i = 0; i < pathVillages.size() - 1; i++) {
+            Village current = pathVillages.get(i);
+            Village next = pathVillages.get(i + 1);
+            
+            gc.strokeLine(
+                current.getLocateX(),
+                current.getLocateY(),
+                next.getLocateX(),
+                next.getLocateY()
+            );
+        }
+
+        // 高亮路径上的村庄
+        gc.setFill(Color.RED);
+        for (Village v : pathVillages) {
+            gc.fillOval(
+                v.getLocateX() - 5,
+                v.getLocateY() - 5,
+                10,
+                10
+            );
+        }
+    }
 }

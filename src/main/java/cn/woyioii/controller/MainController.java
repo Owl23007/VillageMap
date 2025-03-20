@@ -20,6 +20,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.io.File;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Slf4j
 public class MainController implements UIEventListener {
@@ -58,6 +59,10 @@ public class MainController implements UIEventListener {
 
     //数据修改标记
     private boolean dataModified = false;
+
+    // 右键菜单
+    private ContextMenu addRoadMenu;
+    private List<int[]> newRoadsToAdd;
 
     /**
      * FXML初始化方法，在所有@FXML注入完成后调用
@@ -316,19 +321,78 @@ public class MainController implements UIEventListener {
             AlertUtils.showInformation("村村通方案", "所有村庄已连通");
         } else {
             // 存在未连通的村庄组
-            // 获取最小生成树
             List<int[]> mstEdges = MapCalculator.addNewRoadToConnect(adjacencyMatrix, villages);
+            this.newRoadsToAdd = mstEdges;
             System.out.println(mstEdges);
             mapRenderer.highlightRoads(villages, mstEdges);
+            
+            // 创建右键菜单
+            addRoadMenu = new ContextMenu();
+            for(int[] edge : mstEdges) {
+                Village v1 = villages.get(edge[0]-1);
+                Village v2 = villages.get(edge[1]-1);
+                MenuItem item = new MenuItem(String.format("添加道路: %s -> %s", v1.getName(), v2.getName()));
+                item.setOnAction(e -> handleAddNewRoad(v1, v2));
+                addRoadMenu.getItems().add(item);
+            }
+            
+            // 为地图画布添加右键菜单
+            mapCanvas.setOnContextMenuRequested(e -> {
+                if(addRoadMenu != null && !newRoadsToAdd.isEmpty()) {
+                    addRoadMenu.show(mapCanvas, e.getScreenX(), e.getScreenY());
+                }
+            });
+            
             result.append("- 当前图中存在 ").append(components.size()).append(" 个未连通的村庄组\n");
             result.append("- 需要新建 ").append(mstEdges.size()).append(" 条道路以连通所有村庄\n");
-            AlertUtils.showInformation("村村通方案", "已生成村村通方案，共需修建 " + mstEdges.size() + " 条新道路");
+            result.append("- 右键点击地图可快速添加建议的道路\n");
+            AlertUtils.showInformation("村村通方案", "已生成村村通方案，共需修建 " + mstEdges.size() + " 条新道路\n右键点击地图可快速添加建议的道路");
         }
 
         String current = textAreaResult.getText();
         textAreaResult.setText(current + "\n" + result.toString());
 
         updateStatus("村村通方案生成完成");
+    }
+
+    // 处理添加新道路
+    private void handleAddNewRoad(Village start, Village end) {
+        try {
+            // 计算道路长度
+            double distance = MapCalculator.calculateDistance(start, end);
+            
+            // 创建新道路对象
+            Road newRoad = new Road();
+            newRoad.setStartId(start.getId());
+            newRoad.setEndId(end.getId());
+            newRoad.setLength(distance);
+            newRoad.setName(start.getName() + " - " + end.getName());
+            
+            // 保存新道路
+            roadService.addRoad(newRoad);
+            
+            // 从待添加列表中移除该路径
+            newRoadsToAdd.removeIf(edge -> 
+                (edge[0] == start.getId() && edge[1] == end.getId()) || 
+                (edge[0] == end.getId() && edge[1] == start.getId())
+            );
+            
+            // 如果所有建议的道路都已添加,移除右键菜单
+            if(newRoadsToAdd.isEmpty()) {
+                mapCanvas.setOnContextMenuRequested(null);
+                addRoadMenu = null;
+            }
+            
+            // 刷新UI
+            refreshUI();
+            markDataAsModified();
+            
+            // 提示用户
+            updateStatus("已添加道路: " + start.getName() + " -> " + end.getName());
+        } catch(Exception e) {
+            log.error("添加道路失败", e);
+            AlertUtils.showException("添加失败", "无法添加新道路", e);
+        }
     }
 
     // 辅助方法：计算需要新建的道路数量
@@ -421,6 +485,22 @@ public class MainController implements UIEventListener {
         // 计算并存储所有路径
         Map<Integer, List<Integer>> allPaths = MapCalculator.findAllPairsShortestPathsWithRoute(adjacencyMatrix);
         
+        // 设置表格行点击事件
+        shortestPathsTable.setRowFactory(tv -> {
+            TableRow<PathResult> row = new TableRow<>();
+            row.setOnMouseClicked(event -> {
+                if (!row.isEmpty()) {
+                    PathResult result = row.getItem();
+                    if (result.getPathVillages() != null && result.getPathVillages().size() > 1) {
+                        // 高亮显示路径
+                        List<Village> pathVillages = result.getPathVillages();
+                        mapRenderer.highlightPath(pathVillages);
+                    }
+                }
+            });
+            return row;
+        });
+
         // 填充表格数据
         for (int i = 0; i < villages.size(); i++) {
             if (i != startIndex) {  // 排除起点自身
@@ -431,11 +511,16 @@ public class MainController implements UIEventListener {
                 String pathInfo;
                 if (Double.isInfinite(distance)) {
                     shortestPathsTable.getItems().add(
-                        new PathResult(targetVillage.getName(), -1, "不可达")
+                        new PathResult(targetVillage.getName(), -1, "不可达", null)
                     );
                 } else {
                     // 获取路径并格式化
                     List<Integer> path = allPaths.get(i);
+                    // 转换索引为Village对象列表
+                    List<Village> pathVillages = path.stream()
+                        .map(villages::get)
+                        .collect(Collectors.toList());
+                    
                     StringBuilder pathStr = new StringBuilder();
                     for (int j = 0; j < path.size(); j++) {
                         pathStr.append(villages.get(path.get(j)).getName());
@@ -446,7 +531,8 @@ public class MainController implements UIEventListener {
                     
                     double roundedDistance = Math.round(distance * 10.0) / 10.0;
                     shortestPathsTable.getItems().add(
-                        new PathResult(targetVillage.getName(), roundedDistance, pathStr.toString())
+                        new PathResult(targetVillage.getName(), roundedDistance, 
+                            pathStr.toString(), pathVillages)
                     );
                 }
             }
@@ -471,11 +557,13 @@ public class MainController implements UIEventListener {
         private final String targetVillage;
         private final double distance;
         private final String pathInfo;  // 新增路径信息字段
+        private final List<Village> pathVillages; // 新增:存储路径上的村庄
 
-        public PathResult(String targetVillage, double distance, String pathInfo) {
+        public PathResult(String targetVillage, double distance, String pathInfo, List<Village> pathVillages) {
             this.targetVillage = targetVillage;
             this.distance = distance;
             this.pathInfo = pathInfo;
+            this.pathVillages = pathVillages;
         }
 
         // 用于表格显示的格式化方法
