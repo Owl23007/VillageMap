@@ -13,16 +13,7 @@ public class ErrorHandler {
     
     private ErrorHandler() {
     }
-    
-    /**
-     * 设置全局未捕获异常处理器
-     */
-    public static void setupGlobalExceptionHandler() {
-        Thread.setDefaultUncaughtExceptionHandler((thread, throwable) -> {
-            handleException("未捕获异常", throwable);
-        });
-    }
-    
+
     /**
      * 处理异常，记录日志并显示给用户
      */

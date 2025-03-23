@@ -6,6 +6,7 @@ import cn.woyioii.model.Village;
 import cn.woyioii.service.RoadService;
 import cn.woyioii.service.VillageService;
 import cn.woyioii.util.AlertUtils;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.*;
@@ -334,22 +335,16 @@ public class RoadServiceImpl implements RoadService {
     }
 
     // 用于Dijkstra算法的辅助类
+    @Getter
     private static class VillageDistance {
         private final int villageId;
         private final double distance;
-        
+
         public VillageDistance(int villageId, double distance) {
             this.villageId = villageId;
             this.distance = distance;
         }
-        
-        public int getVillageId() {
-            return villageId;
-        }
-        
-        public double getDistance() {
-            return distance;
-        }
+
     }
 
     @Override

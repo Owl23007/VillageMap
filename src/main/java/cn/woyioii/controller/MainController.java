@@ -34,10 +34,11 @@ public class MainController implements UIEventListener {
     @FXML private Canvas mapCanvas;
     @FXML private Label statusLabel;
     @FXML private Label coordinatesLabel;
+    @FXML private Label distanceDisplay;
 
     // FXML 右侧组件
     public TextArea textAreaResult;
-    public ComboBox routeStartVillageComboBox;
+    public ComboBox<Village> routeStartVillageComboBox;
 
     @FXML private ComboBox<Village> startVillageCombo;
 
@@ -350,7 +351,7 @@ public class MainController implements UIEventListener {
         }
 
         String current = textAreaResult.getText();
-        textAreaResult.setText(current + "\n" + result.toString());
+        textAreaResult.setText(current + "\n" + result);
 
         updateStatus("村村通方案生成完成");
     }
@@ -395,30 +396,6 @@ public class MainController implements UIEventListener {
         }
     }
 
-    // 辅助方法：计算需要新建的道路数量
-    private int countNewRoads(List<int[]> mstEdges, List<Road> existingRoads, List<Village> villages) {
-        int count = 0;
-        for (int[] edge : mstEdges) {
-            if (!isExistingRoad(edge, existingRoads, villages)) {
-                count++;
-            }
-        }
-        return count;
-    }
-
-    // 辅助方法：检查边是否为现有道路
-    private boolean isExistingRoad(int[] edge, List<Road> existingRoads, List<Village> villages) {
-        Village v1 = villages.get(edge[0]);
-        Village v2 = villages.get(edge[1]);
-
-        for (Road road : existingRoads) {
-            if ((road.getStartId() == v1.getId() && road.getEndId() == v2.getId()) ||
-                    (road.getStartId() == v2.getId() && road.getEndId() == v1.getId())) {
-                return true;
-            }
-        }
-        return false;
-    }
     // Data 转邻接矩阵
     public double[][] dataToAdjacencyMatrix(List<Village> villages, List<Road> roads) {
         // 创建邻接矩阵
@@ -435,56 +412,36 @@ public class MainController implements UIEventListener {
                 adjacencyMatrix[endIndex][startIndex] = road.getLength();
             }
         }
-        System.out.println(Arrays.deepToString(adjacencyMatrix));
         return adjacencyMatrix;
-    }
-
-    // 两个村庄最短路径
-    @FXML
-    public void findShortestPath() {
-        updateStatus("正在计算最短路径...");
-
-        AlertUtils.showInformation("最短路径", "两点之间的最短路径已显示在地图上");
-    }
-
-    // 最短经过所有村庄的路径
-    @FXML
-    public void generateOptimalRoute() {
-        updateStatus("正在生成最优路线...");
-
-        AlertUtils.showInformation("最优路线", "已生成经过所有村庄的最短路线");
     }
 
     @FXML
     private void findAllShortestPaths() {
         updateStatus("正在计算所有最短路径...");
 
-        // 获取选中的起点村庄
         Village startVillage = startVillageCombo.getValue();
         if(startVillage == null) {
             AlertUtils.showWarning("参数错误", "请选择起点村庄");
             return;
         }
 
-        // 获取所有村庄和道路数据
         List<Village> villages = villageService.getAllVillages();
         List<Road> roads = roadService.getAllRoads();
 
-        // 构建邻接矩阵
         double[][] adjacencyMatrix = dataToAdjacencyMatrix(villages, roads);
+        if (!MapCalculator.validateAdjacencyMatrix(adjacencyMatrix)) {
+            AlertUtils.showError("数据错误", "邻接矩阵构建失败");
+            return;
+        }
 
-        // 计算所有点对最短路径
+        int startIndex = villages.indexOf(startVillage);
+        
+        // 计算从起点到所有其他点的最短路径
+        Map<Integer, List<Integer>> allPaths = MapCalculator.findAllPairsShortestPathsWithRoute(adjacencyMatrix, startIndex);
         double[][] distances = MapCalculator.findAllPairsShortestPaths(adjacencyMatrix);
-
-        // 清空现有数据
+        
         shortestPathsTable.getItems().clear();
 
-        // 获取起点村庄在列表中的索引
-        int startIndex = villages.indexOf(startVillage);
-
-        // 计算并存储所有路径
-        Map<Integer, List<Integer>> allPaths = MapCalculator.findAllPairsShortestPathsWithRoute(adjacencyMatrix);
-        
         // 设置表格行点击事件
         shortestPathsTable.setRowFactory(tv -> {
             TableRow<PathResult> row = new TableRow<>();
@@ -492,9 +449,7 @@ public class MainController implements UIEventListener {
                 if (!row.isEmpty()) {
                     PathResult result = row.getItem();
                     if (result.getPathVillages() != null && result.getPathVillages().size() > 1) {
-                        // 高亮显示路径
-                        List<Village> pathVillages = result.getPathVillages();
-                        mapRenderer.highlightPath(pathVillages);
+                        mapRenderer.highlightPath(result.getPathVillages());
                     }
                 }
             });
@@ -505,50 +460,39 @@ public class MainController implements UIEventListener {
         for (int i = 0; i < villages.size(); i++) {
             if (i != startIndex) {  // 排除起点自身
                 Village targetVillage = villages.get(i);
+                List<Integer> path = allPaths.get(i);
                 double distance = distances[startIndex][i];
                 
-                // 构建路径字符串
-                String pathInfo;
-                if (Double.isInfinite(distance)) {
+                if (path == null || Double.isInfinite(distance)) {
                     shortestPathsTable.getItems().add(
                         new PathResult(targetVillage.getName(), -1, "不可达", null)
                     );
-                } else {
-                    // 获取路径并格式化
-                    List<Integer> path = allPaths.get(i);
-                    // 转换索引为Village对象列表
-                    List<Village> pathVillages = path.stream()
-                        .map(villages::get)
-                        .collect(Collectors.toList());
-                    
-                    StringBuilder pathStr = new StringBuilder();
-                    for (int j = 0; j < path.size(); j++) {
-                        pathStr.append(villages.get(path.get(j)).getName());
-                        if (j < path.size() - 1) {
-                            pathStr.append(" → ");
-                        }
-                    }
-                    
-                    double roundedDistance = Math.round(distance * 10.0) / 10.0;
-                    shortestPathsTable.getItems().add(
-                        new PathResult(targetVillage.getName(), roundedDistance, 
-                            pathStr.toString(), pathVillages)
-                    );
+                    continue;
                 }
+                
+                // 转换索引为Village对象列表
+                List<Village> pathVillages = path.stream()
+                    .map(villages::get)
+                    .collect(Collectors.toList());
+                
+                // 构建路径字符串
+                StringBuilder pathStr = new StringBuilder();
+                for (int j = 0; j < pathVillages.size(); j++) {
+                    pathStr.append(pathVillages.get(j).getName());
+                    if (j < pathVillages.size() - 1) {
+                        pathStr.append(" → ");
+                    }
+                }
+                
+                double roundedDistance = Math.round(distance * 10.0) / 10.0;
+                shortestPathsTable.getItems().add(
+                    new PathResult(targetVillage.getName(), roundedDistance, 
+                        pathStr.toString(), pathVillages)
+                );
             }
         }
 
         updateStatus("最短路径计算完成");
-    }
-
-    // 辅助方法：获取村庄在列表中的索引
-    private int getVillageIndex(int id, List<Village> villages) {
-        for (int i = 0; i < villages.size(); i++) {
-            if (villages.get(i).getId() == id) {
-                return i;
-            }
-        }
-        return -1;
     }
 
     // 路径结果的数据类
@@ -558,28 +502,191 @@ public class MainController implements UIEventListener {
         private final double distance;
         private final String pathInfo;  // 新增路径信息字段
         private final List<Village> pathVillages; // 新增:存储路径上的村庄
+        private final String distanceDisplay; // 添加distanceDisplay属性以匹配FXML绑定
 
         public PathResult(String targetVillage, double distance, String pathInfo, List<Village> pathVillages) {
             this.targetVillage = targetVillage;
             this.distance = distance;
             this.pathInfo = pathInfo;
             this.pathVillages = pathVillages;
-        }
-
-        // 用于表格显示的格式化方法
-        public String getDistanceDisplay() {
-            return distance < 0 ? "不可达" : distance + " km";
+            
+            // 初始化distanceDisplay属性
+            this.distanceDisplay = distance < 0 ? "不可达" : String.format("%.1f", distance);
         }
     }
 
     @FXML
     public void findOptimalRoute() {
-        //todo
+        updateStatus("正在计算最优路径...");
+
+        Village startVillage = routeStartVillageComboBox.getValue();
+        if(startVillage == null) {
+            AlertUtils.showWarning("参数错误", "请选择起点村庄");
+            return;
+        }
+
+        List<Village> villages = villageService.getAllVillages();
+        List<Road> roads = roadService.getAllRoads();
+
+        // 构建邻接矩阵
+        double[][] adjacencyMatrix = dataToAdjacencyMatrix(villages, roads);
+
+        // 检查是否联通
+        if (!MapCalculator.isStronglyConnected(adjacencyMatrix)) {
+            AlertUtils.showWarning("村庄不连通", "当前村庄网络不是完全连通的，无法计算最优路径");
+            textAreaResult.setText(textAreaResult.getText() + "\n无法计算最优路径：村庄网络不连通");
+            return;
+        }
+
+        int startIndex = villages.indexOf(startVillage);
+        // 调用最优路径算法
+        List<Integer> optimalPath = MapCalculator.findOptimalRoute(adjacencyMatrix, startIndex);
+        
+        if (optimalPath.isEmpty()) {
+            AlertUtils.showWarning("计算失败", "无法找到使用现有道路的有效路径");
+            return;
+        }
+
+        // 验证路径是否使用了存在的道路
+        boolean isValidPath = validatePath(optimalPath, roads, villages);
+        if (!isValidPath) {
+            AlertUtils.showWarning("路径无效", "计算出的路径包含不存在的道路");
+            return;
+        }
+
+        // 计算总距离
+        double totalDistance = MapCalculator.calculatePathLength(optimalPath, adjacencyMatrix);
+        if (totalDistance < 0) {
+            AlertUtils.showWarning("计算失败", "无法计算路径总长度");
+            return;
+        }
+
+        // 转换路径为村庄对象列表
+        List<Village> pathVillages = optimalPath.stream()
+                .map(id -> villages.get(id - 1))
+                .collect(Collectors.toList());
+
+        // 更新路径显示
+        mapRenderer.highlightPathWithRoads(pathVillages, getPathRoads(optimalPath, roads, villages));
+
+        // 构建结果字符串
+        StringBuilder result = new StringBuilder("\n最优路径计算结果：\n");
+        result.append("起点: ").append(startVillage.getName()).append("\n");
+        result.append("路径: ");
+        for (int i = 0; i < pathVillages.size(); i++) {
+            result.append(pathVillages.get(i).getName());
+            if (i < pathVillages.size() - 1) {
+                result.append(" → ");
+            }
+        }
+        result.append("\n总距离: ").append(totalDistance).append("km");
+
+        // 更新结果显示
+        textAreaResult.setText(textAreaResult.getText() + result.toString());
+        updateStatus("最优路径计算完成");
     }
 
     @FXML
     public void findOptimalRoundTrip() {
-     //todo
+        updateStatus("正在计算最优回路...");
+
+        Village startVillage = routeStartVillageComboBox.getValue();
+        if(startVillage == null) {
+            AlertUtils.showWarning("参数错误", "请选择起点村庄");
+            return;
+        }
+
+        List<Village> villages = villageService.getAllVillages();
+        List<Road> roads = roadService.getAllRoads();
+
+        // 构建邻接矩阵
+        double[][] adjacencyMatrix = dataToAdjacencyMatrix(villages, roads);
+
+        // 检查是否联通
+        if (!MapCalculator.isStronglyConnected(adjacencyMatrix)) {
+            AlertUtils.showWarning("村庄不连通", "当前村庄网络不是完全连通的，无法计算最优回路");
+            textAreaResult.setText(textAreaResult.getText() + "\n无法计算最优回路：村庄网络不连通");
+            return;
+        }
+
+        int startIndex = villages.indexOf(startVillage);
+        List<Integer> roundTrip = MapCalculator.findOptimalRoundTrip(adjacencyMatrix, startIndex);
+        
+        if (roundTrip.isEmpty()) {
+            AlertUtils.showWarning("计算失败", "无法找到使用现有道路的有效回路");
+            return;
+        }
+
+        // 验证回路是否使用了存在的道路
+        boolean isValidPath = validatePath(roundTrip, roads, villages);
+        if (!isValidPath) {
+            AlertUtils.showWarning("回路无效", "计算出的回路包含不存在的道路");
+            return;
+        }
+
+        // 计算总距离
+        double totalDistance = MapCalculator.calculatePathLength(roundTrip, adjacencyMatrix);
+        if (totalDistance < 0) {
+            AlertUtils.showWarning("计算失败", "无法计算回路总长度");
+            return;
+        }
+
+        // 转换回路为村庄对象列表
+        List<Village> pathVillages = roundTrip.stream()
+                .map(id -> villages.get(id - 1))
+                .collect(Collectors.toList());
+
+        // 更新回路显示
+        mapRenderer.highlightPathWithRoads(pathVillages, getPathRoads(roundTrip, roads, villages));
+
+        // 构建结果字符串
+        StringBuilder result = new StringBuilder("\n最优回路计算结果：\n");
+        result.append("起点: ").append(startVillage.getName()).append("\n");
+        result.append("回路: ");
+        for (int i = 0; i < pathVillages.size(); i++) {
+            result.append(pathVillages.get(i).getName());
+            if (i < pathVillages.size() - 1) {
+                result.append(" → ");
+            }
+        }
+        result.append(" → ").append(startVillage.getName());
+        result.append("\n总距离: ").append(totalDistance).append("km");
+
+        // 更新结果显示
+        textAreaResult.setText(textAreaResult.getText() + result.toString());
+        updateStatus("最优回路计算完成");
+    }
+
+    // 验证路径是否使用了存在的道路
+    private boolean validatePath(List<Integer> path, List<Road> roads, List<Village> villages) {
+        for (int i = 0; i < path.size() - 1; i++) {
+            int currentId = villages.get(path.get(i) - 1).getId();
+            int nextId = villages.get(path.get(i + 1) - 1).getId();
+            boolean hasRoad = roads.stream().anyMatch(road -> 
+                (road.getStartId() == currentId && road.getEndId() == nextId) ||
+                (road.getStartId() == nextId && road.getEndId() == currentId)
+            );
+            if (!hasRoad) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // 获取路径上的实际道路列表
+    private List<Road> getPathRoads(List<Integer> path, List<Road> allRoads, List<Village> villages) {
+        List<Road> pathRoads = new ArrayList<>();
+        for (int i = 0; i < path.size() - 1; i++) {
+            int currentId = villages.get(path.get(i) - 1).getId();
+            int nextId = villages.get(path.get(i + 1) - 1).getId();
+            allRoads.stream()
+                .filter(road -> 
+                    (road.getStartId() == currentId && road.getEndId() == nextId) ||
+                    (road.getStartId() == nextId && road.getEndId() == currentId))
+                .findFirst()
+                .ifPresent(pathRoads::add);
+        }
+        return pathRoads;
     }
 
     // 点击村庄时的逻辑
@@ -658,6 +765,7 @@ public class MainController implements UIEventListener {
 
         // 更新下拉框
         startVillageCombo.getItems().setAll(villageService.getAllVillages());
+        routeStartVillageComboBox.getItems().setAll(villageService.getAllVillages());
 
         // 更新地图
         mapRenderer.redraw(villageService.getAllVillages(), roadService.getAllRoads(), villageService);
@@ -796,7 +904,6 @@ public class MainController implements UIEventListener {
         String execute() throws Exception;
     }
 
-    // 实现UIEventListener接口
     @Override
     public void onDataChanged() {
         markDataAsModified();

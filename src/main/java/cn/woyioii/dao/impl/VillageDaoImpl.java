@@ -2,7 +2,6 @@ package cn.woyioii.dao.impl;
 
 import cn.woyioii.model.Village;
 import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 
 import java.io.FileReader;

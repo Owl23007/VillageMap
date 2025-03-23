@@ -352,14 +352,59 @@ public class MapRenderer {
             return;
         }
 
+        GraphicsContext gc = getGraphicsContext(pathVillages);
+        for (Village v : pathVillages) {
+            gc.fillOval(
+                v.getLocateX() - 5,
+                v.getLocateY() - 5,
+                10,
+                10
+            );
+        }
+    }
+
+    private GraphicsContext getGraphicsContext(List<Village> pathVillages) {
         GraphicsContext gc = canvas.getGraphicsContext2D();
         gc.setStroke(Color.RED);
         gc.setLineWidth(3);
-        
+
         // 绘制路径线段
         for (int i = 0; i < pathVillages.size() - 1; i++) {
             Village current = pathVillages.get(i);
             Village next = pathVillages.get(i + 1);
+
+            gc.strokeLine(
+                current.getLocateX(),
+                current.getLocateY(),
+                next.getLocateX(),
+                next.getLocateY()  // 添加缺少的y坐标参数
+            );
+        }
+
+        // 高亮路径上的村庄
+        gc.setFill(Color.RED);
+        return gc;
+    }
+
+    /**
+     * 高亮显示旅行商问题的最优回路
+     */
+    public void highlightRoundTrip(List<Integer> roundTrip) {
+        // 清除现有高亮
+        redraw(lastVillages, lastRoads, lastVillageService);
+        
+        if (roundTrip == null || roundTrip.size() < 2) {
+            return;
+        }
+
+        GraphicsContext gc = canvas.getGraphicsContext2D();
+        gc.setStroke(Color.PURPLE);
+        gc.setLineWidth(4);
+        
+        // 绘制路径线段
+        for (int i = 0; i < roundTrip.size() - 1; i++) {
+            Village current = lastVillages.get(roundTrip.get(i) - 1);
+            Village next = lastVillages.get(roundTrip.get(i + 1) - 1);
             
             gc.strokeLine(
                 current.getLocateX(),
@@ -367,6 +412,59 @@ public class MapRenderer {
                 next.getLocateX(),
                 next.getLocateY()
             );
+        }
+
+        // 连接最后一个村庄到起点
+        Village start = lastVillages.get(roundTrip.getFirst() - 1);
+        Village end = lastVillages.get(roundTrip.getLast() - 1);
+        gc.strokeLine(
+            end.getLocateX(),
+            end.getLocateY(),
+            start.getLocateX(),
+            start.getLocateY()  // 添加缺少的y坐标参数
+        );
+
+        // 高亮路径上的村庄
+        gc.setFill(Color.PURPLE);
+        for (Integer villageId : roundTrip) {
+            Village v = lastVillages.get(villageId - 1);
+            gc.fillOval(
+                v.getLocateX() - 5,
+                v.getLocateY() - 5,
+                10,
+                10
+            );
+        }
+    }
+
+    /**
+     * 高亮显示实际道路路径
+     */
+    public void highlightPathWithRoads(List<Village> pathVillages, List<Road> pathRoads) {
+        // 清除现有高亮
+        redraw(lastVillages, lastRoads, lastVillageService);
+        
+        if (pathVillages == null || pathVillages.size() < 2 || pathRoads == null || pathRoads.isEmpty()) {
+            return;
+        }
+
+        GraphicsContext gc = canvas.getGraphicsContext2D();
+        
+        // 高亮道路
+        for (Road road : pathRoads) {
+            Village start = lastVillageService.getVillageById(road.getStartId());
+            Village end = lastVillageService.getVillageById(road.getEndId());
+            
+            if (start != null && end != null) {
+                gc.setStroke(Color.RED);
+                gc.setLineWidth(3);
+                gc.strokeLine(
+                    start.getLocateX(),
+                    start.getLocateY(),
+                    end.getLocateX(),
+                    end.getLocateY()
+                );
+            }
         }
 
         // 高亮路径上的村庄

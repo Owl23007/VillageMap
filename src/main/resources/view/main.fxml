@@ -31,8 +31,6 @@
 				</Menu>
 				<Menu text="工具">
 					<MenuItem onAction="#checkConnectivity" text="连通性检查" />
-					<MenuItem onAction="#findShortestPath" text="最短路径查询" />
-					<MenuItem onAction="#generateOptimalRoute" text="生成最优路线" />
 				</Menu>
 			</MenuBar>
 		</VBox>
