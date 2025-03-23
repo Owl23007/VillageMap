@@ -6,10 +6,10 @@ import cn.woyioii.service.VillageService;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.paint.Color;
+import javafx.scene.shape.StrokeLineCap;
 import lombok.Setter;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 /**
  * <h1>地图渲染器</h1>
@@ -61,7 +61,7 @@ public class MapRenderer {
     public MapRenderer(Canvas canvas) {
         this.canvas = canvas;
         this.gc = canvas.getGraphicsContext2D();
-    }
+          }
 
     public void clear() {
         gc.setFill(Color.WHITE);
@@ -290,6 +290,7 @@ public class MapRenderer {
         
         // 执行实际的重绘操作
         clear();
+        // 新增：绘制背景图片在网格下方
         drawGrid();  // 先绘制网格
         drawRoads(roads);
         drawVillages(villages);
@@ -352,25 +353,7 @@ public class MapRenderer {
             return;
         }
 
-        GraphicsContext gc = canvas.getGraphicsContext2D();
-        gc.setStroke(Color.RED);
-        gc.setLineWidth(3);
-        
-        // 绘制路径线段
-        for (int i = 0; i < pathVillages.size() - 1; i++) {
-            Village current = pathVillages.get(i);
-            Village next = pathVillages.get(i + 1);
-            
-            gc.strokeLine(
-                current.getLocateX(),
-                current.getLocateY(),
-                next.getLocateX(),
-                next.getLocateY()
-            );
-        }
-
-        // 高亮路径上的村庄
-        gc.setFill(Color.RED);
+        GraphicsContext gc = getGraphicsContext(pathVillages);
         for (Village v : pathVillages) {
             gc.fillOval(
                 v.getLocateX() - 5,
@@ -379,5 +362,322 @@ public class MapRenderer {
                 10
             );
         }
+    }
+
+    private GraphicsContext getGraphicsContext(List<Village> pathVillages) {
+        GraphicsContext gc = canvas.getGraphicsContext2D();
+        gc.setStroke(Color.RED);
+        gc.setLineWidth(3);
+
+        // 绘制路径线段
+        for (int i = 0; i < pathVillages.size() - 1; i++) {
+            Village current = pathVillages.get(i);
+            Village next = pathVillages.get(i + 1);
+
+            gc.strokeLine(
+                current.getLocateX(),
+                current.getLocateY(),
+                next.getLocateX(),
+                next.getLocateY()  // 添加缺少的y坐标参数
+            );
+        }
+
+        // 高亮路径上的村庄
+        gc.setFill(Color.RED);
+        return gc;
+    }
+
+    public void highlightPathWithRoads(List<Village> pathVillages, List<Road> pathRoads, boolean isRoundTrip) {
+        // 清除现有高亮
+        redraw(lastVillages, lastRoads, lastVillageService);
+        
+        if (pathVillages == null || pathVillages.size() < 2 || pathRoads == null || pathRoads.isEmpty()) {
+            return;
+        }
+
+        GraphicsContext gc = canvas.getGraphicsContext2D();
+        
+        // 高亮道路
+        gc.setStroke(isRoundTrip ? Color.PURPLE : Color.RED);
+        gc.setLineWidth(3);
+        gc.setLineCap(StrokeLineCap.ROUND);
+        
+        // 创建路径段计数Map来跟踪重复路段
+        Map<String, Integer> pathSegmentCount = new HashMap<>();
+        
+        // 绘制所有路径段和箭头
+        for (int i = 0; i < pathVillages.size() - 1; i++) {
+            Village start = pathVillages.get(i);
+            Village end = pathVillages.get(i + 1);
+            
+            // 生成路径段的唯一标识符（按较小ID在前排序）
+            String segmentKey = start.getId() < end.getId() ? 
+                start.getId() + "-" + end.getId() :
+                end.getId() + "-" + start.getId();
+                
+            // 更新计数
+            int count = pathSegmentCount.getOrDefault(segmentKey, 0);
+            pathSegmentCount.put(segmentKey, count + 1);
+            
+            // 根据重复次数计算偏移量
+            double offset = count * 4; // 每次重复偏移4个像素
+            
+            // 计算偏移后的路径点
+            double[] offsetPoints = calculateOffsetPoints(
+                start.getLocateX(), start.getLocateY(),
+                end.getLocateX(), end.getLocateY(),
+                offset
+            );
+            
+            // 绘制偏移后的路径线段
+            gc.strokeLine(
+                offsetPoints[0], offsetPoints[1],
+                offsetPoints[2], offsetPoints[3]
+            );
+            
+            // 在偏移后的路径中点绘制箭头
+            drawArrow(gc, 
+                offsetPoints[0], offsetPoints[1],
+                offsetPoints[2], offsetPoints[3],
+                isRoundTrip ? Color.PURPLE : Color.RED
+            );
+        }
+        
+        // 如果是回环路径，处理返回起点的路径段
+        if (isRoundTrip && pathVillages.size() >= 2) {
+            Village last = pathVillages.getLast();
+            Village first = pathVillages.getFirst();
+            
+            String segmentKey = last.getId() < first.getId() ? 
+                last.getId() + "-" + first.getId() :
+                first.getId() + "-" + last.getId();
+            
+            int count = pathSegmentCount.getOrDefault(segmentKey, 0);
+            double offset = count * 4;
+            
+            double[] offsetPoints = calculateOffsetPoints(
+                last.getLocateX(), last.getLocateY(),
+                first.getLocateX(), first.getLocateY(),
+                offset
+            );
+            
+            gc.strokeLine(
+                offsetPoints[0], offsetPoints[1],
+                offsetPoints[2], offsetPoints[3]
+            );
+            
+            drawArrow(gc, 
+                offsetPoints[0], offsetPoints[1],
+                offsetPoints[2], offsetPoints[3],
+                Color.PURPLE
+            );
+        }
+
+        // 高亮路径上的村庄节点
+        gc.setFill(isRoundTrip ? Color.PURPLE : Color.RED);
+        for (Village v : pathVillages) {
+            // 绘制大一点的节点
+            gc.fillOval(
+                v.getLocateX() - 6,
+                v.getLocateY() - 6,
+                12,
+                12
+            );
+            
+            // 为起点和终点添加特殊标记
+            if (v.equals(pathVillages.getFirst())) {
+                gc.setStroke(Color.YELLOW);
+                gc.setLineWidth(2);
+                gc.strokeOval(
+                    v.getLocateX() - 8,
+                    v.getLocateY() - 8,
+                    16,
+                    16
+                );
+                
+                // 添加"起点"标记
+                gc.setFill(Color.GREEN);
+                gc.setFont(javafx.scene.text.Font.font(14));
+                gc.fillText("起点", v.getLocateX() + 10, v.getLocateY() - 10);
+                
+                if (isRoundTrip) {
+                    gc.fillText("终点", v.getLocateX() + 10, v.getLocateY() + 20);
+                }
+            }
+            
+            // 如果不是回路且是终点，添加终点标记
+            if (!isRoundTrip && v.equals(pathVillages.getLast())) {
+                gc.setStroke(Color.GREEN);
+                gc.setLineWidth(2);
+                gc.strokeOval(
+                    v.getLocateX() - 8,
+                    v.getLocateY() - 8,
+                    16,
+                    16
+                );
+                gc.setFill(Color.GREEN);
+                gc.fillText("终点", v.getLocateX() + 10, v.getLocateY() - 10);
+            }
+        }
+
+        // 重新绘制所有村庄
+        for (Village v : lastVillages) {
+            double radius = 6;
+            
+            // 检查村庄是否在路径上
+            if (pathVillages.contains(v)) {
+                gc.setFill(isRoundTrip ? Color.PURPLE : Color.RED);
+                
+                // 为起点和终点添加特殊标记
+                if (v.equals(pathVillages.getFirst())) {
+                    gc.setStroke(Color.YELLOW);
+                    gc.setLineWidth(2);
+                    gc.strokeOval(
+                        v.getLocateX() - 8,
+                        v.getLocateY() - 8,
+                        16,
+                        16
+                    );
+                    
+                    // 添加"起点"标记
+                    gc.setFill(Color.WHITE);
+                    gc.setFont(javafx.scene.text.Font.font(14));
+                    gc.fillText("起点", v.getLocateX() + 10, v.getLocateY() - 10);
+                    
+                    if (isRoundTrip) {
+                        gc.fillText("终点", v.getLocateX() + 10, v.getLocateY() + 20);
+                    }
+                } 
+                // 如果不是回路且是终点，添加终点标记
+                else if (!isRoundTrip && v.equals(pathVillages.getLast())) {
+                    gc.setStroke(Color.YELLOW);
+                    gc.setLineWidth(2);
+                    gc.strokeOval(
+                        v.getLocateX() - 8,
+                        v.getLocateY() - 8,
+                        16,
+                        16
+                    );
+                    gc.setFill(Color.WHITE);
+                    gc.fillText("终点", v.getLocateX() + 10, v.getLocateY() - 10);
+                }
+            } else {
+                // 非路径上的村庄保持蓝色
+                gc.setFill(villageColor);
+                radius = 5;  // 使用默认大小
+            }
+            
+            // 绘制村庄节点
+            gc.fillOval(
+                v.getLocateX() - radius,
+                v.getLocateY() - radius,
+                radius * 2,
+                radius * 2
+            );
+            
+            // 绘制村庄名称
+            gc.setFill(Color.BLACK);
+            gc.setFont(javafx.scene.text.Font.font(15));
+            gc.fillText(v.getName(), v.getLocateX() + radius + 3, v.getLocateY() + 3);
+        }
+    }
+
+    // 计算偏移后的路径点坐标
+    private double[] calculateOffsetPoints(double x1, double y1, double x2, double y2, double offset) {
+        if (offset == 0) {
+            return new double[]{x1, y1, x2, y2};
+        }
+        
+        // 计算路径的方向向量
+        double dx = x2 - x1;
+        double dy = y2 - y1;
+        
+        // 计算垂直于路径的单位向量
+        double length = Math.sqrt(dx * dx + dy * dy);
+        double normalX = -dy / length;
+        double normalY = dx / length;
+        
+        // 应用偏移
+        double offsetX1 = x1 + normalX * offset;
+        double offsetY1 = y1 + normalY * offset;
+        double offsetX2 = x2 + normalX * offset;
+        double offsetY2 = y2 + normalY * offset;
+        
+        return new double[]{offsetX1, offsetY1, offsetX2, offsetY2};
+    }
+
+    // 绘制箭头
+    private void drawArrow(GraphicsContext gc, double startX, double startY, double endX, double endY) {
+        // 计算路径中点
+        double midX = (startX + endX) / 2;
+        double midY = (startY + endY) / 2;
+        
+        // 计算方向角度
+        double angle = Math.atan2(endY - startY, endX - startX);
+        
+        // 箭头大小
+        double arrowSize = 15;
+        
+        // 箭头的两个翼点
+        double arrowAngle = Math.PI / 6; // 30度
+        double x1 = midX - arrowSize * Math.cos(angle - arrowAngle);
+        double y1 = midY - arrowSize * Math.sin(angle - arrowAngle);
+        double x2 = midX - arrowSize * Math.cos(angle + arrowAngle);
+        double y2 = midY - arrowSize * Math.sin(angle + arrowAngle);
+        
+        // 保存当前绘图状态
+        gc.save();
+        
+        // 设置箭头样式
+        gc.setFill(Color.RED);
+        
+        // 绘制箭头
+        gc.beginPath();
+        gc.moveTo(midX, midY);
+        gc.lineTo(x1, y1);
+        gc.lineTo(x2, y2);
+        gc.closePath();
+        gc.fill();
+        
+        // 恢复绘图状态
+        gc.restore();
+    }
+
+    // 修改绘制箭头方法，添加颜色参数
+    private void drawArrow(GraphicsContext gc, double startX, double startY, 
+                         double endX, double endY, Color arrowColor) {
+        // 计算路径中点
+        double midX = (startX + endX) / 2;
+        double midY = (startY + endY) / 2;
+        
+        // 计算方向角度
+        double angle = Math.atan2(endY - startY, endX - startX);
+        
+        // 箭头大小
+        double arrowSize = 15;
+        
+        // 箭头的两个翼点
+        double arrowAngle = Math.PI / 6; // 30度
+        double x1 = midX - arrowSize * Math.cos(angle - arrowAngle);
+        double y1 = midY - arrowSize * Math.sin(angle - arrowAngle);
+        double x2 = midX - arrowSize * Math.cos(angle + arrowAngle);
+        double y2 = midY - arrowSize * Math.sin(angle + arrowAngle);
+        
+        // 保存当前绘图状态
+        gc.save();
+        
+        // 设置箭头样式
+        gc.setFill(arrowColor);
+        
+        // 绘制箭头
+        gc.beginPath();
+        gc.moveTo(midX, midY);
+        gc.lineTo(x1, y1);
+        gc.lineTo(x2, y2);
+        gc.closePath();
+        gc.fill();
+        
+        // 恢复绘图状态
+        gc.restore();
     }
 }

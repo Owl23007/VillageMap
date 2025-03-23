@@ -6,6 +6,7 @@ import cn.woyioii.model.Village;
 import cn.woyioii.service.RoadService;
 import cn.woyioii.service.VillageService;
 import cn.woyioii.util.AlertUtils;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.*;
@@ -293,18 +294,18 @@ public class RoadServiceImpl implements RoadService {
             Integer current = endId;
             
             // 如果无法到达终点
-            if (previous.get(endId) == null && endId != startId) {
+            if (previous.get(endId) == null) {
                 log.warn("无法从村庄{}到达村庄{}", startId, endId);
                 AlertUtils.showWarning("无法到达", "没有通往目标村庄的路径");
                 return Collections.emptyList();
             }
             
             // 回溯路径
-            while (current != null && previous.get(current) != null) {
+            while (previous.get(current) != null) {
                 Integer prev = previous.get(current);
                 Road road = findRoad(prev, current);
                 if (road != null) {
-                    path.add(0, road); // 添加到路径开头
+                    path.addFirst(road); // 添加到路径开头
                 }
                 current = prev;
             }
@@ -334,22 +335,16 @@ public class RoadServiceImpl implements RoadService {
     }
 
     // 用于Dijkstra算法的辅助类
+    @Getter
     private static class VillageDistance {
         private final int villageId;
         private final double distance;
-        
+
         public VillageDistance(int villageId, double distance) {
             this.villageId = villageId;
             this.distance = distance;
         }
-        
-        public int getVillageId() {
-            return villageId;
-        }
-        
-        public double getDistance() {
-            return distance;
-        }
+
     }
 
     @Override

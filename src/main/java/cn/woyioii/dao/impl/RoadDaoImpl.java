@@ -26,11 +26,6 @@ public class RoadDaoImpl implements RoadDao {
         initializeFile(); // 确保文件存在
     }
 
-    public RoadDaoImpl(String filePath) {
-        this.filePath = filePath;
-        initializeFile();
-    }
-
     @Override
     public void setFilePath(String filePath) {
         // 设置文件路径
