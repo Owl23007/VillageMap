@@ -606,43 +606,6 @@ public class MapRenderer {
         return new double[]{offsetX1, offsetY1, offsetX2, offsetY2};
     }
 
-    // 绘制箭头
-    private void drawArrow(GraphicsContext gc, double startX, double startY, double endX, double endY) {
-        // 计算路径中点
-        double midX = (startX + endX) / 2;
-        double midY = (startY + endY) / 2;
-        
-        // 计算方向角度
-        double angle = Math.atan2(endY - startY, endX - startX);
-        
-        // 箭头大小
-        double arrowSize = 15;
-        
-        // 箭头的两个翼点
-        double arrowAngle = Math.PI / 6; // 30度
-        double x1 = midX - arrowSize * Math.cos(angle - arrowAngle);
-        double y1 = midY - arrowSize * Math.sin(angle - arrowAngle);
-        double x2 = midX - arrowSize * Math.cos(angle + arrowAngle);
-        double y2 = midY - arrowSize * Math.sin(angle + arrowAngle);
-        
-        // 保存当前绘图状态
-        gc.save();
-        
-        // 设置箭头样式
-        gc.setFill(Color.RED);
-        
-        // 绘制箭头
-        gc.beginPath();
-        gc.moveTo(midX, midY);
-        gc.lineTo(x1, y1);
-        gc.lineTo(x2, y2);
-        gc.closePath();
-        gc.fill();
-        
-        // 恢复绘图状态
-        gc.restore();
-    }
-
     // 修改绘制箭头方法，添加颜色参数
     private void drawArrow(GraphicsContext gc, double startX, double startY, 
                          double endX, double endY, Color arrowColor) {

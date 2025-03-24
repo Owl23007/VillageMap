@@ -1,4 +1,4 @@
-module cn.woyioii.villagemap {
+module cn.woyioii.villageMap {
     requires javafx.controls;
     requires javafx.fxml;
     requires static lombok;
